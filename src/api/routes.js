@@ -1,6 +1,9 @@
 // All API route handlers
 
 import express from 'express';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { search, searchStream, getEnabledProviders, getDocCache, ALLOWED_ENGINES } from '../search/engine.js';
 import { batchFetch, fetchReadableDocument } from '../fetch/document.js';
 import { generateSummary, testConnection } from '../ai/orchestrator.js';
@@ -11,7 +14,17 @@ import { detectProfileTarget, scanProfile, PROFILER_PLATFORMS } from '../profile
 import { fetchBlueskyPosts, fetchBlueskyActors, fetchGdeltArticles } from '../social/search.js';
 import { scrapeTPB, scrape1337x, extractMagnetFromUrl } from '../torrent/scrapers.js';
 
-const APP_VERSION = '0.3.3';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const APP_VERSION = (() => {
+  try {
+    const pkgPath = path.join(__dirname, '../../package.json');
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+    return String(pkg.version || '0.0.0');
+  } catch {
+    return '0.0.0';
+  }
+})();
 const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news']);
 const ALLOWED_LANGS = new Set(['auto', 'it-IT', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'pt-PT', 'ru-RU', 'zh-CN', 'ja-JP']);
 

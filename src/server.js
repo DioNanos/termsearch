@@ -36,14 +36,27 @@ app.use(router);
 
 // Serve frontend static files
 app.use(express.static(FRONTEND_DIST, {
-  maxAge: '1h',
+  maxAge: 0,
   etag: true,
   index: 'index.html',
+  setHeaders: (res, filePath) => {
+    const base = path.basename(filePath);
+    if (base === 'index.html' || base === 'app.js' || base === 'style.css') {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      return;
+    }
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+  },
 }));
 
 // SPA fallback — serve index.html for any non-API route
 app.get('*', (req, res) => {
   applySecurityHeaders(res);
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
 });
 
