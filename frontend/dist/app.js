@@ -268,7 +268,6 @@ const AI_PRESETS = [
   { id: 'chutes',   label: 'Chutes.ai TEE',            api_base: 'https://llm.chutes.ai/v1',  keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
   { id: 'anthropic',label: 'Anthropic',                api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
   { id: 'openai',   label: 'OpenAI',                   api_base: 'https://api.openai.com/v1', keyRequired: true,  defaultModel: 'gpt-4o-mini' },
-  { id: 'openrouter', label: 'OpenRoute/OpenRouter',   api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
 ];
 
 const ENGINE_GROUPS = [
@@ -387,6 +386,20 @@ function EnginePicker(opts = {}) {
   ));
 
   details.append(summary, body);
+
+  // Close on click-outside
+  details.addEventListener('toggle', () => {
+    if (!details.open) return;
+    const onClickOutside = (e) => {
+      if (!details.contains(e.target)) {
+        details.open = false;
+        document.removeEventListener('click', onClickOutside, true);
+      }
+    };
+    // Defer to avoid catching the same click that opened it
+    requestAnimationFrame(() => document.addEventListener('click', onClickOutside, true));
+  });
+
   return details;
 }
 
@@ -1029,7 +1042,7 @@ function renderApp() {
     el('div', { className: 'header-nav' },
       LangPicker(),
       EnginePicker({ compact: true }),
-      el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
+      el('button', { className: 'btn-icon', title: 'Settings', onClick: () => navigate('#/settings') }, iconEl('settings')),
       el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
     ),
   );
@@ -1067,9 +1080,11 @@ function renderApp() {
         onClick: () => { state.query = ''; state.category = 'web'; navigate('#/'); renderApp(); },
       }, 'Term', el('strong', {}, 'Search')),
       LangPicker(),
-      EnginePicker({ compact: true }),
-      el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
-      el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
+      el('div', { className: 'mobile-bar-actions' },
+        EnginePicker({ compact: true }),
+        el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
+        el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
+      ),
     ),
   );
 
@@ -1122,6 +1137,33 @@ function renderApp() {
 }
 
 // ─── Homepage ─────────────────────────────────────────────────────────────
+function addToBrowser() {
+  // Try legacy Firefox API
+  try {
+    if (window.external?.AddSearchProvider) {
+      window.external.AddSearchProvider(location.origin + '/opensearch.xml');
+      return;
+    }
+  } catch {}
+  // Show inline hint
+  const existing = document.querySelector('.add-browser-hint');
+  if (existing) { existing.remove(); return; }
+  const hint = el('div', { className: 'add-browser-hint' },
+    el('strong', {}, 'Add TermSearch to your browser:'),
+    el('div', { style: 'margin-top:6px' },
+      el('span', { style: 'color:var(--text2)' }, 'Firefox'), ' — click the address bar, look for "Add TermSearch"',
+    ),
+    el('div', { style: 'margin-top:3px' },
+      el('span', { style: 'color:var(--text2)' }, 'Chrome'), ' — Settings → Search engine → Manage → Add',
+    ),
+    el('div', { style: 'margin-top:3px;font-family:var(--font-mono);font-size:10px;color:var(--text3);word-break:break-all' },
+      `URL: ${location.origin}/#/?q=%s`,
+    ),
+  );
+  document.querySelector('.home-actions')?.after(hint);
+  setTimeout(() => hint.remove(), 12000);
+}
+
 function renderHome(app) {
   const home = el('div', { className: 'home' },
     el('div', { className: 'home-logo' }, 'Term', el('strong', {}, 'Search')),
@@ -1134,6 +1176,8 @@ function renderHome(app) {
       LangPicker(),
       el('button', { className: 'btn', onClick: () => navigate('#/settings') }, iconEl('settings'), ' Settings'),
       el('button', { className: 'btn', onClick: toggleTheme }, iconEl('theme'), ' Theme'),
+      el('button', { className: 'btn', onClick: addToBrowser, title: 'Add as browser search engine' }, iconEl('search'), ' Add to browser'),
+      el('a', { className: 'btn', href: 'https://github.com/DioNanos/termsearch', target: '_blank', rel: 'noopener noreferrer' }, iconEl('github'), ' GitHub'),
     ),
   );
 
@@ -1483,7 +1527,7 @@ async function renderSettings() {
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI · OpenRoute/OpenRouter',
+          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI',
           el('br', {}),
           'You can also keep custom OpenAI-compatible endpoints.',
         ),
@@ -1627,7 +1671,7 @@ async function renderSettings() {
     // Server info
     el('div', { className: 'settings-section' },
       el('h2', {}, 'Server Info'),
-      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.3')),
+      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.8')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Active providers'), el('span', { className: 'info-val' }, (health?.providers || []).join(', ') || 'none')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'AI'),               el('span', { className: 'info-val' }, health?.ai_enabled ? `enabled (${health.ai_model})` : 'not configured')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'GitHub'),           el('a', { href: 'https://github.com/DioNanos/termsearch', target: '_blank', className: 'info-val', style: 'color:var(--link)' }, 'DioNanos/termsearch')),
