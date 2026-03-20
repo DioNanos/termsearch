@@ -21,9 +21,9 @@ Opens `http://localhost:3000`. That's it.
 
 ## What You Get
 
-**Search** — DuckDuckGo + Wikipedia out of the box. Add Brave, Mojeek, Yandex, Marginalia, Ahmia, or your own SearXNG for more coverage. Engine picker lets you mix and match per-search.
+**Search** — DuckDuckGo, Wikipedia, Startpage, Qwant, Ecosia, GitHub, Yandex, Marginalia, Ahmia out of the box. Add Brave, Mojeek, or your own SearXNG for more coverage. Engine picker lets you mix and match per-search.
 
-**AI Summaries** — Connect any OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, Chutes.ai, Anthropic, OpenAI). 2-phase agentic flow: AI picks sources, reads pages, synthesizes an answer. Session memory carries context across queries.
+**AI Summaries** — Connect any OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, Chutes.ai, OpenRoute.ai, Anthropic, OpenAI). 2-phase agentic flow: AI picks sources, reads pages, synthesizes an answer. Session memory carries context across queries.
 
 **Social Profiler** — Paste a GitHub/Bluesky/Reddit/Twitter URL or @handle, get a profile card with stats, top repos, similar accounts.
 
@@ -35,7 +35,7 @@ Opens `http://localhost:3000`. That's it.
 
 | Level | Config | What works |
 |-------|--------|------------|
-| **0** | None | DuckDuckGo + Wikipedia + Yandex + Marginalia + Ahmia |
+| **0** | None | DuckDuckGo + Wikipedia + Startpage + Qwant + Ecosia + GitHub + Yandex + Marginalia + Ahmia |
 | **1** | API keys (Settings) | + Brave, Mojeek |
 | **2** | AI endpoint (Settings) | + AI summaries, query refinement, session memory |
 | **3** | SearXNG URL | + 40 engines via your SearXNG instance |
@@ -67,6 +67,7 @@ Configure in **Settings > AI** from the browser. Presets auto-fill endpoint and 
 | LM Studio | `localhost:1234/v1` | no | — |
 | llama.cpp | `localhost:8080/v1` | no | — |
 | Chutes.ai TEE | `llm.chutes.ai/v1` | yes | `DeepSeek-V3.2-TEE` |
+| OpenRoute.ai | `openroute.ai/api/v1` | yes | `deepseek/deepseek-chat` |
 | Anthropic | `api.anthropic.com/v1` | yes | `claude-3-5-haiku-latest` |
 | OpenAI | `api.openai.com/v1` | yes | `gpt-4o-mini` |
 | Custom | any OpenAI-compatible | optional | — |
@@ -75,7 +76,7 @@ Load Models button auto-discovers available models from the endpoint.
 
 ## Search Engines
 
-**Zero-config** (no API key): DuckDuckGo, Wikipedia, GitHub, Yandex, Ahmia, Marginalia
+**Zero-config** (no API key): DuckDuckGo, Wikipedia, Startpage, Qwant, Ecosia, GitHub, Yandex, Ahmia, Marginalia
 
 **API key** (toggle in Settings): Brave Search, Mojeek
 
@@ -107,7 +108,7 @@ src/
   config/              manager + defaults + env overrides
   search/
     engine.js          fan-out, merge, rank, health tracking
-    providers/         ddg, wikipedia, brave, mojeek, searxng, github, yandex, ahmia, marginalia
+    providers/         ddg, wikipedia, startpage, qwant, ecosia, brave, mojeek, searxng, github, yandex, ahmia, marginalia
     ranking.js         source diversity ranking
     cache.js           tiered L1+L2 cache
   ai/

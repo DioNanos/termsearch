@@ -76,6 +76,12 @@ function shutdown(signal) {
 }
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('uncaughtException', (err) => {
+  console.error('[termsearch] uncaughtException:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[termsearch] unhandledRejection:', reason);
+});
 
 export default app;
 export { port, host };

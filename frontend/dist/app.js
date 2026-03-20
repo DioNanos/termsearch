@@ -265,13 +265,14 @@ const AI_PRESETS = [
   { id: 'ollama',   label: 'LocalHost — Ollama',       api_base: 'http://127.0.0.1:11434/v1', keyRequired: false, defaultModel: 'qwen3.5:4b' },
   { id: 'lmstudio', label: 'LocalHost — LM Studio',    api_base: 'http://127.0.0.1:1234/v1',  keyRequired: false, defaultModel: '' },
   { id: 'llamacpp', label: 'LocalHost — llama.cpp',    api_base: 'http://127.0.0.1:8080/v1',  keyRequired: false, defaultModel: '' },
-  { id: 'chutes',   label: 'Chutes.ai TEE',            api_base: 'https://llm.chutes.ai/v1',  keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
-  { id: 'anthropic',label: 'Anthropic',                api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
-  { id: 'openai',   label: 'OpenAI',                   api_base: 'https://api.openai.com/v1', keyRequired: true,  defaultModel: 'gpt-4o-mini' },
+  { id: 'chutes',      label: 'Chutes.ai TEE',   api_base: 'https://llm.chutes.ai/v1',          keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
+  { id: 'openroute',  label: 'OpenRoute.ai',   api_base: 'https://openroute.ai/api/v1',        keyRequired: true,  defaultModel: 'deepseek/deepseek-chat' },
+  { id: 'anthropic',  label: 'Anthropic',       api_base: 'https://api.anthropic.com/v1',       keyRequired: true,  defaultModel: 'claude-3-5-haiku-latest' },
+  { id: 'openai',     label: 'OpenAI',          api_base: 'https://api.openai.com/v1',          keyRequired: true,  defaultModel: 'gpt-4o-mini' },
 ];
 
 const ENGINE_GROUPS = [
-  { label: 'Web Core', items: ['duckduckgo', 'wikipedia', 'brave', 'startpage', 'qwant', 'mojeek', 'bing', 'google', 'yahoo'] },
+  { label: 'Web Core', items: ['duckduckgo', 'wikipedia', 'startpage', 'qwant', 'ecosia', 'brave', 'mojeek', 'bing', 'google', 'yahoo'] },
   { label: 'Uncensored', items: ['yandex', 'marginalia', 'ahmia'] },
   { label: 'Code & Dev', items: ['github', 'github-api', 'hackernews', 'reddit'] },
   { label: 'Media', items: ['youtube', 'sepiasearch'] },
@@ -288,7 +289,7 @@ const ENGINE_PRESETS = [
 
 // ─── Engine availability (requires config) ────────────────────────────────
 const SEARXNG_ROUTED = new Set([
-  'bing', 'google', 'yahoo', 'startpage', 'qwant',
+  'bing', 'google', 'yahoo',
   'youtube', 'reddit', 'hackernews', 'sepiasearch',
   'wikidata', 'crossref', 'openalex', 'openlibrary',
   'mastodon users', 'mastodon hashtags', 'tootfinder',
@@ -303,6 +304,7 @@ function isEngineAvailable(engine) {
   if (engine === 'yandex')     return cfg.yandex?.enabled !== false;
   if (engine === 'ahmia')      return cfg.ahmia?.enabled !== false;
   if (engine === 'marginalia') return cfg.marginalia?.enabled !== false;
+  if (engine === 'startpage' || engine === 'qwant' || engine === 'ecosia') return true;
   if (SEARXNG_ROUTED.has(engine)) return Boolean(cfg.searxng?.enabled && cfg.searxng?.url);
   return true; // duckduckgo, wikipedia, github, github-api — sempre disponibili
 }
@@ -592,7 +594,7 @@ function renderAiPanel() {
   // Steps
   const showSteps = isLoading && state.aiSteps.length > 0;
   const stepsEl = showSteps ? el('div', { className: 'ai-steps' },
-    ...state.aiSteps.slice(-4).map(s => el('div', { className: 'ai-step' }, s)),
+    ...state.aiSteps.slice(-2).map(s => el('div', { className: 'ai-step' }, s)),
   ) : null;
 
   // Content
@@ -708,9 +710,17 @@ function ProfilerPanel(data) {
   info.append(nameEl);
   if (profile.handle) info.append(el('div', { className: 'profile-handle' }, '@' + profile.handle));
   if (profile.bio)    info.append(el('div', { className: 'profile-bio' }, profile.bio));
+  if (profile.blog) {
+    const safeBlog = sanitizeHttpUrl(profile.blog.startsWith('http') ? profile.blog : 'https://' + profile.blog);
+    if (safeBlog) info.append(el('a', { className: 'profile-blog', href: safeBlog, target: '_blank', rel: 'noopener' }, profile.blog.replace(/^https?:\/\//, '')));
+  }
 
   // Extra metadata
   const extras = [profile.location, profile.company].filter(Boolean);
+  if (profile.createdAt) {
+    const d = new Date(profile.createdAt);
+    if (!isNaN(d)) extras.push('Joined ' + d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }));
+  }
   if (extras.length) {
     info.append(el('div', { style: 'font-size:10px;color:var(--text3);margin-top:4px' }, extras.join(' · ')));
   }
@@ -719,13 +729,17 @@ function ProfilerPanel(data) {
 
   // Stats
   const statsFields = [
-    { key: 'followers',  label: 'Followers' },
-    { key: 'following',  label: 'Following' },
-    { key: 'repos',      label: 'Repos' },
-    { key: 'karma',      label: 'Karma' },
-    { key: 'posts',      label: 'Posts' },
-    { key: 'subscribers',label: 'Subscribers' },
-    { key: 'likes',      label: 'Likes' },
+    { key: 'followers',    label: 'Followers' },
+    { key: 'following',    label: 'Following' },
+    { key: 'repos',        label: 'Repos' },
+    { key: 'publicRepos',  label: 'Repos' },
+    { key: 'karma',        label: 'Karma' },
+    { key: 'linkKarma',    label: 'Link↑' },
+    { key: 'commentKarma', label: 'Comment↑' },
+    { key: 'posts',        label: 'Posts' },
+    { key: 'postsCount',   label: 'Posts' },
+    { key: 'subscribers',  label: 'Subscribers' },
+    { key: 'likes',        label: 'Likes' },
   ];
   const statsData = statsFields.filter(f => profile[f.key] != null);
   if (statsData.length) {
@@ -1132,6 +1146,10 @@ function renderApp() {
 
   const main = el('div', { className: 'main' });
 
+  // Profiler panel appears first (above AI panel)
+  const profPanel = ProfilerPanel(state.profilerData || (state.profilerLoading ? { target: null, profile: null } : null));
+  if (profPanel) main.append(profPanel);
+
   // AI panel placeholder
   const aiPanel = el('div', { id: 'ai-panel', className: 'panel panel-ai', style: 'display:none' });
   main.append(aiPanel);
@@ -1151,10 +1169,6 @@ function renderApp() {
       if (state.selectedEngines.length) meta.append(document.createTextNode(' · engines: ' + state.selectedEngines.join(', ')));
       main.append(meta);
     }
-
-    // 1. Profiler
-    const profPanel = ProfilerPanel(state.profilerData || (state.profilerLoading ? { target: null, profile: null } : null));
-    if (profPanel) main.append(profPanel);
 
     // 2. Torrent panel (only if there are magnets)
     const torPanel = TorrentPanel(state.torrentData);
@@ -1599,7 +1613,7 @@ async function renderSettings() {
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI',
+          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · OpenRoute.ai · Anthropic · OpenAI',
           el('br', {}),
           'You can also keep custom OpenAI-compatible endpoints.',
         ),

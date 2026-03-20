@@ -688,9 +688,10 @@ a:hover { color: var(--link-h); }
 }
 .ai-content.ai-content-collapsed {
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  max-height: 8.5em;
 }
 
 /* Sources */
@@ -740,6 +741,8 @@ a:hover { color: var(--link-h); }
 .profile-name:hover { color: var(--prof-text); }
 .profile-handle { font-size: 11px; color: var(--text3); margin-top: 1px; }
 .profile-bio { font-size: 12px; color: var(--text2); margin-top: 6px; line-height: 1.5; }
+.profile-blog { display: block; font-size: 11px; color: var(--accent); margin-top: 3px; text-decoration: none; opacity: 0.85; }
+.profile-blog:hover { opacity: 1; text-decoration: underline; }
 
 .profile-stats { display: flex; flex-wrap: wrap; gap: 16px; padding-top: 12px; border-top: 1px solid var(--prof-dim); }
 .stat { display: flex; flex-direction: column; gap: 1px; }

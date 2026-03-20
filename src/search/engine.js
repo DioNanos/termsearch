@@ -12,6 +12,9 @@ import * as github from './providers/github.js';
 import * as yandex from './providers/yandex.js';
 import * as ahmia from './providers/ahmia.js';
 import * as marginalia from './providers/marginalia.js';
+import * as startpage from './providers/startpage.js';
+import * as qwant from './providers/qwant.js';
+import * as ecosia from './providers/ecosia.js';
 
 let _searchCache = null;
 let _docCache = null;
@@ -52,6 +55,10 @@ export const ALLOWED_ENGINES = new Set([
   '1337x',
   'piratebay',
   'nyaa',
+  // native scrapers
+  'startpage',
+  'qwant',
+  'ecosia',
   // uncensored / alternative index engines
   'yandex',
   'ahmia',
@@ -97,6 +104,24 @@ const PROVIDER_REGISTRY = {
     run: searxng.search,
     defaultProvider: true,
   },
+  startpage: {
+    aliases: new Set(['startpage']),
+    enabled: (_cfg) => true,
+    run: startpage.search,
+    defaultProvider: true,
+  },
+  qwant: {
+    aliases: new Set(['qwant']),
+    enabled: (_cfg) => true,
+    run: qwant.search,
+    defaultProvider: true,
+  },
+  ecosia: {
+    aliases: new Set(['ecosia']),
+    enabled: (_cfg) => true,
+    run: ecosia.search,
+    defaultProvider: true,
+  },
   github: {
     aliases: new Set(['github', 'github-api']),
     enabled: (_cfg) => true,
@@ -107,19 +132,19 @@ const PROVIDER_REGISTRY = {
     aliases: new Set(['yandex']),
     enabled: (cfg) => cfg?.yandex?.enabled !== false,
     run: yandex.search,
-    defaultProvider: false,
+    defaultProvider: true,
   },
   ahmia: {
     aliases: new Set(['ahmia']),
     enabled: (cfg) => cfg?.ahmia?.enabled !== false,
     run: ahmia.search,
-    defaultProvider: false,
+    defaultProvider: true,
   },
   marginalia: {
     aliases: new Set(['marginalia']),
     enabled: (cfg) => cfg?.marginalia?.enabled !== false,
     run: marginalia.search,
-    defaultProvider: false,
+    defaultProvider: true,
   },
 };
 
@@ -485,7 +510,10 @@ export async function search({ query, lang = 'en-US', safe = '1', page = 1, cate
     };
   });
 
-  _searchCache.set(cacheKey, response, cfg.search.cache_ttl_search_ms);
+  // Don't cache empty results — likely a transient block/CAPTCHA; retry on next request
+  if (response.results.length > 0) {
+    _searchCache.set(cacheKey, response, cfg.search.cache_ttl_search_ms);
+  }
   return response;
 }
 
