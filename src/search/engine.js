@@ -55,8 +55,10 @@ export const ALLOWED_ENGINES = new Set([
   '1337x',
   'piratebay',
   'nyaa',
+  'yts',
+  'eztv',
+  'tgx',
   // native scrapers
-  'startpage',
   'qwant',
   'ecosia',
   // uncensored / alternative index engines
@@ -611,6 +613,9 @@ export async function* searchStream({ query, lang = 'en-US', safe = '1', page = 
 
 export function getEnabledProviders(cfg) {
   const providers = ['duckduckgo', 'wikipedia'];
+  if (cfg?.startpage?.enabled !== false) providers.push('startpage');
+  if (cfg?.qwant?.enabled !== false) providers.push('qwant');
+  if (cfg?.ecosia?.enabled !== false) providers.push('ecosia');
   if (cfg.brave?.enabled && cfg.brave?.api_key) providers.push('brave');
   if (cfg.mojeek?.enabled && cfg.mojeek?.api_key) providers.push('mojeek');
   if (cfg.searxng?.enabled && cfg.searxng?.url) providers.push('searxng');

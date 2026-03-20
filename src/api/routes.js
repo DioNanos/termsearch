@@ -12,7 +12,7 @@ import { sendJson, sendRateLimited, applySecurityHeaders } from './middleware.js
 import { getStatus as autostartStatus, setEnabled as autostartSetEnabled } from '../autostart/manager.js';
 import { detectProfileTarget, scanProfile, PROFILER_PLATFORMS } from '../profiler/scanner.js';
 import { fetchBlueskyPosts, fetchBlueskyActors, fetchGdeltArticles } from '../social/search.js';
-import { scrapeTPB, scrape1337x, extractMagnetFromUrl } from '../torrent/scrapers.js';
+import { scrapeTPB, scrape1337x, scrapeYTS, scrapeNyaa, scrapeEZTV, scrapeTGx, extractMagnetFromUrl } from '../torrent/scrapers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +25,7 @@ const APP_VERSION = (() => {
     return '0.0.0';
   }
 })();
-const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news']);
+const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news', 'torrent']);
 const ALLOWED_LANGS = new Set(['auto', 'it-IT', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'pt-PT', 'ru-RU', 'zh-CN', 'ja-JP']);
 
 function parseCategory(raw) {
@@ -393,15 +393,15 @@ export function createRouter(config, rateLimiters) {
     }
 
     const cfg = config.getConfig();
-    if (!cfg.ai?.enabled) return sendJson(res, 200, { refined_query: req.body?.query, intent: 'other', also_search: [] });
-
     const query = String(req.body?.query || '').trim();
     const lang = resolveLang(req.body?.lang, req.headers['accept-language']);
     if (!query) return sendJson(res, 400, { error: 'missing_query' });
 
+    if (!cfg.ai?.enabled) return sendJson(res, 200, { refined_query: query, intent: 'other', also_search_on: [], category: 'web' });
+
     const result = await refineQuery({ query, lang }, cfg.ai);
     applySecurityHeaders(res);
-    res.json(result || { refined_query: query, intent: 'other', also_search: [] });
+    res.json(result || { refined_query: query, intent: 'other', also_search_on: [], category: 'web' });
   });
 
   // ─── AI summary (SSE streaming) ────────────────────────────────────────────
@@ -482,7 +482,7 @@ export function createRouter(config, rateLimiters) {
       return sendJson(res, 400, { error: 'invalid_body' });
     }
     // Whitelist accepted config keys to prevent unexpected writes
-    const allowed = ['port', 'host', 'ai', 'brave', 'mojeek', 'yandex', 'ahmia', 'marginalia', 'searxng', 'search', 'rate_limit'];
+    const allowed = ['port', 'host', 'ai', 'brave', 'mojeek', 'startpage', 'qwant', 'ecosia', 'yandex', 'ahmia', 'marginalia', 'searxng', 'search', 'rate_limit'];
     const filtered = {};
     for (const key of allowed) {
       if (key in body) filtered[key] = body[key];
@@ -637,13 +637,30 @@ export function createRouter(config, rateLimiters) {
     const query = String(req.body?.q || req.body?.query || '').trim().slice(0, 200);
     if (!query) return sendJson(res, 400, { error: 'missing_query', message: 'q required' });
     try {
-      const [tpb, lxx] = await Promise.allSettled([scrapeTPB(query, 8), scrape1337x(query, 7)]);
-      const results = [
-        ...(tpb.status === 'fulfilled' ? tpb.value : []),
-        ...(lxx.status === 'fulfilled' ? lxx.value : []),
+      const [tpb, lxx, yts, nyaa, eztv, tgx] = await Promise.allSettled([
+        scrapeTPB(query, 8),
+        scrape1337x(query, 6),
+        scrapeYTS(query, 6),
+        scrapeNyaa(query, 6),
+        scrapeEZTV(query, 6),
+        scrapeTGx(query, 6),
+      ]);
+      const all = [
+        ...(tpb.status  === 'fulfilled' ? tpb.value  : []),
+        ...(lxx.status  === 'fulfilled' ? lxx.value  : []),
+        ...(yts.status  === 'fulfilled' ? yts.value  : []),
+        ...(nyaa.status === 'fulfilled' ? nyaa.value : []),
+        ...(eztv.status === 'fulfilled' ? eztv.value : []),
+        ...(tgx.status  === 'fulfilled' ? tgx.value  : []),
       ];
+      // Deduplicate by magnet hash, sort by seeds desc
+      const seen = new Set();
+      const results = all
+        .filter((r) => { const h = r.magnetLink?.match(/btih:([a-f0-9]+)/i)?.[1]?.toLowerCase(); if (!h || seen.has(h)) return false; seen.add(h); return true; })
+        .sort((a, b) => (b.seed || 0) - (a.seed || 0));
+      const sources = [...new Set(results.map((r) => r.engine))];
       applySecurityHeaders(res);
-      res.json({ results, source: results.length ? 'tpb+1337x' : 'none' });
+      res.json({ results, source: sources.join('+') || 'none' });
     } catch (error) {
       sendJson(res, 502, { error: 'scrape_failed', message: error.message });
     }

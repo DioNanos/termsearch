@@ -27,7 +27,7 @@ Opens `http://localhost:3000`. That's it.
 
 **Social Profiler** — Paste a GitHub/Bluesky/Reddit/Twitter URL or @handle, get a profile card with stats, top repos, similar accounts.
 
-**Torrent Search** — The Pirate Bay + 1337x with magnet links, seeders, file sizes.
+**Torrent Search** — The Pirate Bay, 1337x, YTS, Nyaa, EZTV, and Torrent Galaxy with magnet links, seeders, file sizes.
 
 **Social & News** — Bluesky posts + GDELT articles inline.
 
@@ -84,7 +84,7 @@ Load Models button auto-discovers available models from the endpoint.
 
 **Self-hosted**: SearXNG (proxy to 40+ engines)
 
-**Selectable per-search**: Engine picker icon in the header lets you toggle individual engines, use presets (All / Balanced / GitHub Focus), or pick from groups (Web Core, Uncensored, Code & Dev, Media, Research, Federated, Torrent).
+**Selectable per-search**: Engine picker icon in the header lets you toggle individual engines, use presets (All / Web / Uncensored / GitHub / Torrent / Social / Research), or pick from groups (Web Core, Uncensored, Code & Dev, Media, Research, Federated, Torrent).
 
 ## Frontend
 
@@ -121,7 +121,7 @@ src/
   fetch/               document fetcher + SSRF guard
   profiler/            social profile scanner (10 platforms)
   social/              Bluesky + GDELT + scrapers
-  torrent/             TPB + 1337x + magnet extraction
+  torrent/             TPB + 1337x + YTS + Nyaa + EZTV + TGx + magnet extraction
   autostart/           Termux:Boot / systemd / launchd
   api/                 routes + middleware
 

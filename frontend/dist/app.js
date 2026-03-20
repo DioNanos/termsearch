@@ -102,7 +102,7 @@ function route() {
   const params = new URLSearchParams(queryIdx >= 0 ? hash.slice(queryIdx + 1) : '');
   const q = params.get('q') || '';
   const cat = (params.get('cat') || 'web').toLowerCase();
-  state.category = ['web', 'images', 'news'].includes(cat) ? cat : 'web';
+  state.category = ['web', 'images', 'news', 'torrent'].includes(cat) ? cat : 'web';
   if (q && (q !== state.query || state.results.length === 0)) {
     state.query = q;
     doSearch(q);
@@ -278,13 +278,17 @@ const ENGINE_GROUPS = [
   { label: 'Media', items: ['youtube', 'sepiasearch'] },
   { label: 'Research', items: ['wikidata', 'crossref', 'openalex', 'openlibrary'] },
   { label: 'Federated', items: ['mastodon users', 'mastodon hashtags', 'tootfinder', 'lemmy communities', 'lemmy posts'] },
-  { label: 'Torrent', items: ['piratebay', '1337x', 'nyaa'] },
+  { label: 'Torrent', items: ['piratebay', '1337x', 'yts', 'nyaa', 'eztv', 'tgx'] },
 ];
 
 const ENGINE_PRESETS = [
-  { id: 'all', label: 'All', engines: [] },
-  { id: 'balanced', label: 'Balanced', engines: ['duckduckgo', 'wikipedia', 'bing', 'brave', 'github', 'reddit', 'youtube'] },
-  { id: 'github', label: 'GitHub Focus', engines: ['github-api', 'github', 'duckduckgo', 'wikipedia'] },
+  { id: 'all',        label: 'All',        engines: [] },
+  { id: 'web',        label: 'Web',        engines: ['duckduckgo', 'startpage', 'qwant', 'ecosia', 'wikipedia'] },
+  { id: 'uncensored', label: 'Uncensored', engines: ['yandex', 'marginalia', 'ahmia', 'duckduckgo'] },
+  { id: 'github',     label: 'GitHub',     engines: ['github-api', 'github', 'duckduckgo', 'wikipedia'] },
+  { id: 'torrent',    label: 'Torrent',    engines: ['piratebay', '1337x', 'yts', 'nyaa', 'eztv', 'tgx'] },
+  { id: 'social',     label: 'Social',     engines: ['reddit', 'hackernews', 'youtube', 'mastodon users', 'lemmy posts'] },
+  { id: 'research',   label: 'Research',   engines: ['wikipedia', 'wikidata', 'crossref', 'openalex', 'openlibrary'] },
 ];
 
 // ─── Engine availability (requires config) ────────────────────────────────
@@ -294,7 +298,7 @@ const SEARXNG_ROUTED = new Set([
   'wikidata', 'crossref', 'openalex', 'openlibrary',
   'mastodon users', 'mastodon hashtags', 'tootfinder',
   'lemmy communities', 'lemmy posts',
-  'piratebay', '1337x', 'nyaa',
+  // piratebay, 1337x, nyaa, yts, eztv, tgx — native scrapers, always available
 ]);
 
 function isEngineAvailable(engine) {
@@ -304,6 +308,7 @@ function isEngineAvailable(engine) {
   if (engine === 'yandex')     return cfg.yandex?.enabled !== false;
   if (engine === 'ahmia')      return cfg.ahmia?.enabled !== false;
   if (engine === 'marginalia') return cfg.marginalia?.enabled !== false;
+  if (['piratebay', '1337x', 'yts', 'nyaa', 'eztv', 'tgx'].includes(engine)) return true;
   if (engine === 'startpage') return (state.config?.startpage?.enabled) !== false;
   if (engine === 'qwant')     return (state.config?.qwant?.enabled)     !== false;
   if (engine === 'ecosia')    return (state.config?.ecosia?.enabled)     !== false;
@@ -362,16 +367,19 @@ function EnginePicker(opts = {}) {
   const presetRow = el('div', { className: 'engine-preset-row' });
   ENGINE_PRESETS.forEach((preset) => {
     const isActive = preset.id === 'all' ? isAll
-      : preset.engines.length > 0 && preset.engines.every(e => state.selectedEngines.includes(e)) && state.selectedEngines.length === preset.engines.length;
+      : preset.engines.length > 0
+        && preset.engines.every(e => state.selectedEngines.includes(e))
+        && state.selectedEngines.length === preset.engines.length;
     presetRow.append(el('button', {
-      className: `btn ${isActive || preset.id === 'balanced' ? 'btn-primary' : ''}`,
+      className: `btn ${isActive ? 'btn-primary' : ''}`,
       type: 'button',
       onClick: () => {
-        // 'all' preset → clear filter (backend uses all configured providers)
         setSelectedEngines(preset.id === 'all' ? [] : preset.engines);
-        // visually check/uncheck all available chips
-        [...details.querySelectorAll('.engine-chip input:not(:disabled)')].forEach((input) => {
-          input.checked = preset.id === 'all' || preset.engines.includes(input.closest('.engine-chip')?.querySelector('span')?.textContent?.trim().toLowerCase() || '');
+        // update chip checkboxes via data-engine attribute
+        [...details.querySelectorAll('.engine-chip input')].forEach((input) => {
+          const engine = input.closest('.engine-chip')?.dataset?.engine || '';
+          if (input.disabled) return;
+          input.checked = preset.id === 'all' || preset.engines.includes(engine);
         });
       },
     }, preset.label));
@@ -392,7 +400,7 @@ function EnginePicker(opts = {}) {
       const input = el('input', inputAttrs);
       const chipClass = `engine-chip${available ? '' : ' engine-chip-unavailable'}`;
       const title = available ? engine : `${engine} — not configured (Settings)`;
-      const label = el('label', { className: chipClass, for: id, title },
+      const label = el('label', { className: chipClass, for: id, title, 'data-engine': engine },
         input,
         el('span', {}, engine),
       );
@@ -409,7 +417,7 @@ function EnginePicker(opts = {}) {
       type: 'button',
       onClick: () => {
         const checked = [...details.querySelectorAll('.engine-chip input:not(:disabled):checked')]
-          .map((node) => node.closest('.engine-chip')?.querySelector('span')?.textContent?.trim().toLowerCase())
+          .map((node) => node.closest('.engine-chip')?.dataset?.engine || '')
           .filter(Boolean);
         const availableAll = ENGINE_GROUPS.flatMap(g => g.items).filter(isEngineAvailable);
         // If all available engines are checked, send [] (no filter)
@@ -851,6 +859,8 @@ function SocialPanel(results) {
 }
 
 // ─── Search logic ─────────────────────────────────────────────────────────
+const TORRENT_QUERY_RE = /\b(torrent|magnet|\.iso|\.mkv|\.avi|\.mp4|720p|1080p|2160p|4k|uhd|season|s\d{1,2}e\d{1,2}|xvid|x264|x265|hevc|blu.?ray|webrip|dvdrip|bdrip|hdtv|yify|yts|piratebay|1337x|nyaa|eztv|tgx|download\s+film|download\s+serie|scarica\s+film)\b/i;
+
 function isProfileQuery(q) {
   return /^https?:\/\/(github|twitter|x|instagram|bluesky|reddit|linkedin|youtube|tiktok|telegram|facebook)/.test(q)
     || /^@[a-zA-Z0-9_\.]{2,}$/.test(q)
@@ -947,7 +957,10 @@ async function runSearchProgressive(q, lang, category, engines = []) {
 async function doSearch(q, category = state.category) {
   if (!q.trim()) return;
   addSearchToHistory(q);
-  state.category = ['web', 'images', 'news'].includes(category) ? category : 'web';
+  const VALID_CATS = ['web', 'images', 'news', 'torrent'];
+  // Fast torrent intent detection — only auto-switch if user is on the default web tab
+  if (TORRENT_QUERY_RE.test(q) && category === 'web') category = 'torrent';
+  state.category = VALID_CATS.includes(category) ? category : 'web';
   state.loading = true;
   state.results = [];
   state.aiSummary = '';
@@ -955,7 +968,7 @@ async function doSearch(q, category = state.category) {
   state.aiError = null;
   state.aiMeta = null;
   state.profilerData = null;
-  state.profilerLoading = isProfileQuery(q);
+  state.profilerLoading = false;
   state.torrentData = [];
   state.socialData = [];
   renderApp();
@@ -963,7 +976,33 @@ async function doSearch(q, category = state.category) {
   const lang = getResolvedLang();
   const engines = state.selectedEngines.slice();
 
+  // ── Torrent category: direct scraper, no stream ──────────────────────────
+  if (state.category === 'torrent') {
+    try {
+      const res = await api('/api/torrent-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q }),
+      });
+      state.loading = false;
+      state.torrentData = res?.results || [];
+      state.providers = res?.source ? [res.source] : [];
+    } catch {
+      state.loading = false;
+      state.torrentData = [];
+    }
+    renderApp();
+    return;
+  }
+
   try {
+    // AI query intent — runs in parallel with search, uses result to extend engines
+    const aiQueryPromise = api('/api/ai-query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: q, lang }),
+    }).catch(() => null);
+
     const searchPromise = runSearchProgressive(q, lang, state.category, engines).catch(async () => {
       const p = new URLSearchParams({ q, lang, cat: state.category });
       if (engines.length > 0) p.set('engines', engines.join(','));
@@ -974,15 +1013,45 @@ async function doSearch(q, category = state.category) {
       api(`/api/social-search?q=${encodeURIComponent(q)}`).catch(() => null),
     ];
 
-    if (state.profilerLoading) {
-      promises.push(
-        api(`/api/profiler?q=${encodeURIComponent(q)}`).catch(() => null)
-      );
+    if (isProfileQuery(q)) {
+      state.profilerLoading = true;
+      promises.push(api(`/api/profiler?q=${encodeURIComponent(q)}`).catch(() => null));
     } else {
       promises.push(Promise.resolve(null));
     }
 
     const [searchRes, socialRes, profilerRes] = await Promise.all(promises);
+
+    // Use AI intent routing: if also_search_on has engines the user didn't select, run a second pass
+    const aiQuery = await aiQueryPromise;
+    if (aiQuery?.also_search_on?.length && state.category === 'web' && !engines.length) {
+      // AI suggested category switch (e.g. torrent) — honour it if user didn't pick manually
+      if (aiQuery.category === 'torrent' && state.category !== 'torrent') {
+        state.category = 'torrent';
+        navigate(buildSearchHash(q, 'torrent'));
+        const torRes = await api('/api/torrent-search', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ q }),
+        }).catch(() => null);
+        state.loading = false;
+        state.torrentData = torRes?.results || [];
+        state.providers = torRes?.source ? [torRes.source] : [];
+        renderApp();
+        return;
+      }
+      // Otherwise run a second search with the AI-suggested engines (non-blocking supplement)
+      const p2 = new URLSearchParams({ q, lang, cat: 'web', engines: aiQuery.also_search_on.join(',') });
+      api(`/api/search?${p2}`).then((extra) => {
+        if (!extra?.results?.length) return;
+        const existing = new Set(state.results.map(r => r.url));
+        const fresh = extra.results.filter(r => !existing.has(r.url));
+        if (fresh.length) {
+          state.results = [...state.results, ...fresh];
+          state.providers = [...new Set([...state.providers, ...(extra.providers || [])])];
+          renderApp();
+        }
+      }).catch(() => null);
+    }
 
     state.loading = false;
     state.results = searchRes?.results || state.results || [];
@@ -995,7 +1064,7 @@ async function doSearch(q, category = state.category) {
     state.profilerData = profilerRes;
     state.profilerLoading = false;
 
-    // Torrent results (from main search or extracted by engine)
+    // Torrent results extracted from web search
     state.torrentData = state.results.filter(r => r.magnetLink || r.engine?.includes('torrent') || r.engine?.includes('piratebay') || r.engine?.includes('1337x'));
 
     renderApp();
@@ -1107,9 +1176,10 @@ function renderApp() {
 
   const categoryBar = el('div', { className: 'category-tabs hide-mobile' });
   const categories = [
-    { id: 'web', label: 'Web' },
-    { id: 'images', label: 'Images' },
-    { id: 'news', label: 'News' },
+    { id: 'web',     label: 'Web' },
+    { id: 'images',  label: 'Images' },
+    { id: 'news',    label: 'News' },
+    { id: 'torrent', label: 'Torrent' },
   ];
   const buildCatTabs = (container) => {
     categories.forEach((cat) => {

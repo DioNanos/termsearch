@@ -2,18 +2,41 @@
 
 // Source quality weights — higher = results from this source ranked first
 const SOURCE_ENGINE_WEIGHTS = {
-  'wikipedia':    1.8,
+  // Reference sources
+  'wikipedia':     1.8,
   'wikipedia-api': 1.8,
-  'brave-api':    1.5,
-  'mojeek-api':   1.4,
-  'duckduckgo':   1.2,
-  'searxng':      1.1,
-  // engines from SearXNG
-  'startpage':    1.3,
-  'qwant':        1.2,
-  'bing':         1.1,
-  'google':       1.1,
-  'yahoo':        1.0,
+  'wikidata':      1.6,
+  // Paid API providers
+  'brave-api':     1.5,
+  'mojeek-api':    1.4,
+  'mojeek':        1.3,
+  // Native zero-config scrapers
+  'startpage':     1.35,
+  'qwant':         1.3,
+  'ecosia':        1.2,
+  'duckduckgo':    1.2,
+  // Alternative/uncensored
+  'yandex':        1.15,
+  'marginalia':    1.1,
+  'ahmia':         1.0,
+  // SearXNG-routed
+  'searxng':       1.1,
+  'bing':          1.1,
+  'google':        1.1,
+  'yahoo':         1.0,
+  // Dev/code
+  'github':        1.25,
+  'github-api':    1.3,
+  'hackernews':    1.15,
+  // Social
+  'reddit':        1.1,
+  // Torrent (rank by seeds, not source quality)
+  'piratebay':     1.0,
+  '1337x':         1.0,
+  'yts':           1.0,
+  'nyaa':          1.0,
+  'eztv':          1.0,
+  'tgx':           1.0,
 };
 
 function getSourceWeight(engine) {
