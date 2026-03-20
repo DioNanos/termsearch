@@ -1,7 +1,7 @@
 // All API route handlers
 
 import express from 'express';
-import { search, searchStream, getEnabledProviders, getDocCache } from '../search/engine.js';
+import { search, searchStream, getEnabledProviders, getDocCache, ALLOWED_ENGINES } from '../search/engine.js';
 import { batchFetch, fetchReadableDocument } from '../fetch/document.js';
 import { generateSummary, testConnection } from '../ai/orchestrator.js';
 import { refineQuery } from '../ai/query.js';
@@ -11,8 +11,9 @@ import { detectProfileTarget, scanProfile, PROFILER_PLATFORMS } from '../profile
 import { fetchBlueskyPosts, fetchBlueskyActors, fetchGdeltArticles } from '../social/search.js';
 import { scrapeTPB, scrape1337x, extractMagnetFromUrl } from '../torrent/scrapers.js';
 
-const APP_VERSION = '0.3.1';
+const APP_VERSION = '0.3.2';
 const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news']);
+const ALLOWED_LANGS = new Set(['auto', 'it-IT', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'pt-PT', 'ru-RU', 'zh-CN', 'ja-JP']);
 
 function parseCategory(raw) {
   const category = String(raw || 'web').trim().toLowerCase();
@@ -22,13 +23,46 @@ function parseCategory(raw) {
 function parseEngines(raw) {
   if (!raw) return [];
   const source = Array.isArray(raw) ? raw.join(',') : String(raw);
-  return [...new Set(
+  const parsed = [...new Set(
     source
       .split(',')
       .map((entry) => entry.trim().toLowerCase())
       .filter(Boolean)
       .slice(0, 12)
   )];
+  if (!parsed.every((engine) => ALLOWED_ENGINES.has(engine))) return null;
+  return parsed;
+}
+
+function normalizeLang(raw) {
+  const input = String(raw || '').trim();
+  if (!input) return null;
+  const lower = input.toLowerCase();
+  const exact = [...ALLOWED_LANGS].find((lang) => lang.toLowerCase() === lower);
+  if (exact) return exact;
+  const shortMap = {
+    it: 'it-IT',
+    en: 'en-US',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    de: 'de-DE',
+    pt: 'pt-PT',
+    ru: 'ru-RU',
+    zh: 'zh-CN',
+    ja: 'ja-JP',
+  };
+  return shortMap[lower] || null;
+}
+
+function resolveLang(rawLang, acceptLanguageHeader = '') {
+  const normalized = normalizeLang(rawLang || 'auto');
+  if (normalized && normalized !== 'auto') return normalized;
+  const first = String(acceptLanguageHeader || '')
+    .split(',')
+    .map((part) => part.trim().split(';')[0])
+    .find(Boolean);
+  const fromHeader = normalizeLang(first || '');
+  return fromHeader || 'en-US';
 }
 
 function normalizeBase(rawBase) {
@@ -39,6 +73,7 @@ function normalizeBase(rawBase) {
 
 function detectModelProvider(base, preset = '') {
   const p = String(preset || '').trim().toLowerCase();
+  if (p === 'openroute') return 'openrouter';
   if (p && p !== 'custom') return p;
   const b = String(base || '').toLowerCase();
   if (b.includes('anthropic.com')) return 'anthropic';
@@ -51,18 +86,67 @@ function detectModelProvider(base, preset = '') {
   return 'openai_compat';
 }
 
-async function fetchOpenAiCompatibleModels(base, apiKey, timeoutMs = 10000) {
+function parseModelPayload(payload) {
+  if (Array.isArray(payload)) {
+    return payload.map((item) => typeof item === 'string' ? item.trim() : String(item?.id || item?.name || '').trim()).filter(Boolean);
+  }
+  if (!payload || typeof payload !== 'object') return [];
+  if (Array.isArray(payload.data)) {
+    return payload.data.map((item) => String(item?.id || '').trim()).filter(Boolean);
+  }
+  if (Array.isArray(payload.models)) {
+    return payload.models.map((item) => typeof item === 'string' ? item.trim() : String(item?.id || item?.name || '').trim()).filter(Boolean);
+  }
+  if (Array.isArray(payload?.result?.models)) {
+    return payload.result.models.map((item) => typeof item === 'string' ? item.trim() : String(item?.id || item?.name || '').trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function buildModelAuthVariants(provider, apiKey) {
+  const key = String(apiKey || '').trim();
+  if (!key) return [{ Accept: 'application/json' }];
+  if (provider === 'chutes') {
+    return [
+      { Accept: 'application/json', Authorization: `Bearer ${key}` },
+      { Accept: 'application/json', 'x-api-key': key },
+      { Accept: 'application/json', Authorization: `Bearer ${key}`, 'x-api-key': key },
+    ];
+  }
+  return [{ Accept: 'application/json', Authorization: `Bearer ${key}` }];
+}
+
+async function fetchOpenAiCompatibleModels(base, apiKey, provider = 'openai_compat', timeoutMs = 10000) {
+  const variants = buildModelAuthVariants(provider, apiKey);
+  for (const headers of variants) {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const response = await fetch(`${base}/models`, { headers, signal: ac.signal });
+      if (!response.ok) continue;
+      const payload = await response.json();
+      const parsed = parseModelPayload(payload);
+      if (parsed.length > 0) return parsed;
+    } catch {
+      // try next variant
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  return [];
+}
+
+async function fetchOpenRouterModels(base, apiKey, timeoutMs = 10000) {
+  const endpoint = base.includes('/api/v1') ? `${base}/models` : `${base}/api/v1/models`;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
     const headers = { Accept: 'application/json' };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const response = await fetch(`${base}/models`, { headers, signal: ac.signal });
+    const response = await fetch(endpoint, { headers, signal: ac.signal });
     if (!response.ok) return [];
     const payload = await response.json();
-    return (payload?.data || [])
-      .map((item) => String(item?.id || '').trim())
-      .filter(Boolean);
+    return parseModelPayload(payload);
   } catch {
     return [];
   } finally {
@@ -86,9 +170,7 @@ async function fetchAnthropicModels(base, apiKey, timeoutMs = 10000) {
     });
     if (!response.ok) return [];
     const payload = await response.json();
-    return (payload?.data || [])
-      .map((item) => String(item?.id || '').trim())
-      .filter(Boolean);
+    return parseModelPayload(payload);
   } catch {
     return [];
   } finally {
@@ -175,11 +257,12 @@ export function createRouter(config, rateLimiters) {
     if (!q) return sendJson(res, 400, { error: 'missing_query', message: 'q parameter required' });
     if (q.length > cfg.search.max_query_length) return sendJson(res, 400, { error: 'query_too_long' });
 
-    const lang = String(req.query.lang || 'en-US');
+    const lang = resolveLang(req.query.lang, req.headers['accept-language']);
     const safe = String(req.query.safe || '1');
     const page = Number(req.query.page || '1');
     const category = parseCategory(req.query.cat);
     const engines = parseEngines(req.query.engines);
+    if (engines === null) return sendJson(res, 400, { error: 'invalid_engines', message: 'engines must be a comma-separated allowlisted set.' });
 
     try {
       const result = await search({ query: q, lang, safe, page, category, engines }, cfg);
@@ -202,11 +285,12 @@ export function createRouter(config, rateLimiters) {
     if (!q) return sendJson(res, 400, { error: 'missing_query' });
     if (q.length > cfg.search.max_query_length) return sendJson(res, 400, { error: 'query_too_long' });
 
-    const lang = String(req.query.lang || 'en-US');
+    const lang = resolveLang(req.query.lang, req.headers['accept-language']);
     const safe = String(req.query.safe || '1');
     const page = Number(req.query.page || '1');
     const category = parseCategory(req.query.cat);
     const engines = parseEngines(req.query.engines);
+    if (engines === null) return sendJson(res, 400, { error: 'invalid_engines', message: 'engines must be a comma-separated allowlisted set.' });
 
     applySecurityHeaders(res);
     res.setHeader('Content-Type', 'text/event-stream');
@@ -225,6 +309,8 @@ export function createRouter(config, rateLimiters) {
             lang,
             results: chunk.results || [],
             providers: chunk.providers || [],
+            degraded: chunk.degraded === true,
+            engineStats: chunk.engineStats || { responded: chunk.providers || [], failed: [], unstable: [], health: {} },
           });
         } else {
           send({
@@ -234,8 +320,8 @@ export function createRouter(config, rateLimiters) {
             results: chunk.results || [],
             allResults: chunk.results || [],
             providers: chunk.providers || [],
-            degraded: false,
-            engineStats: { responded: chunk.providers || [], failed: [], unstable: [], health: {} },
+            degraded: chunk.degraded === true,
+            engineStats: chunk.engineStats || { responded: chunk.providers || [], failed: [], unstable: [], health: {} },
           });
         }
       }
@@ -280,7 +366,7 @@ export function createRouter(config, rateLimiters) {
     if (!cfg.ai?.enabled) return sendJson(res, 200, { refined_query: req.body?.query, intent: 'other', also_search: [] });
 
     const query = String(req.body?.query || '').trim();
-    const lang = String(req.body?.lang || 'en-US');
+    const lang = resolveLang(req.body?.lang, req.headers['accept-language']);
     if (!query) return sendJson(res, 400, { error: 'missing_query' });
 
     const result = await refineQuery({ query, lang }, cfg.ai);
@@ -304,7 +390,7 @@ export function createRouter(config, rateLimiters) {
     }
 
     const query = String(req.body?.query || '').trim();
-    const lang = String(req.body?.lang || 'en-US');
+    const lang = resolveLang(req.body?.lang, req.headers['accept-language']);
     const results = Array.isArray(req.body?.results) ? req.body.results : [];
     const session = Array.isArray(req.body?.session) ? req.body.session.slice(-4) : [];
     const streamMode = req.body?.stream !== false;
@@ -412,13 +498,15 @@ export function createRouter(config, rateLimiters) {
     let models = [];
     if (provider === 'anthropic') {
       models = await fetchAnthropicModels(base, apiKey);
+    } else if (provider === 'openrouter') {
+      models = await fetchOpenRouterModels(base, apiKey);
     } else if (provider === 'ollama') {
       models = await fetchOllamaModels(base);
       if (models.length === 0) {
-        models = await fetchOpenAiCompatibleModels(base, apiKey);
+        models = await fetchOpenAiCompatibleModels(base, apiKey, provider);
       }
     } else {
-      models = await fetchOpenAiCompatibleModels(base, apiKey);
+      models = await fetchOpenAiCompatibleModels(base, apiKey, provider);
     }
 
     models = [...new Set(models)].slice(0, 80);
@@ -448,7 +536,11 @@ export function createRouter(config, rateLimiters) {
         results = await mojeekSearch({ query: testQuery, config: cfg, timeoutMs: 8000 });
       } else if (name === 'searxng') {
         const { search: searxSearch } = await import('../search/providers/searxng.js');
-        results = await searxSearch({ query: testQuery, config: cfg, timeoutMs: 8000 });
+        const response = await searxSearch({ query: testQuery, config: cfg, timeoutMs: 8000 });
+        results = Array.isArray(response) ? response : (response?.results || []);
+      } else if (name === 'github') {
+        const { search: githubSearch } = await import('../search/providers/github.js');
+        results = await githubSearch({ query: testQuery, config: cfg, timeoutMs: 8000 });
       } else {
         return sendJson(res, 400, { error: 'unknown_provider' });
       }

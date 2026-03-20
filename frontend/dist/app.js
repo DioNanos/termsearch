@@ -17,6 +17,14 @@ const state = {
   providers: [],
   config: null,
   historyEnabled: localStorage.getItem('ts-save-history') !== '0',
+  selectedEngines: (() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('ts-engines') || '[]');
+      return Array.isArray(raw) ? raw.slice(0, 20).map((v) => String(v || '').trim().toLowerCase()).filter(Boolean) : [];
+    } catch {
+      return [];
+    }
+  })(),
   searchHistory: (() => {
     try {
       const raw = JSON.parse(localStorage.getItem('ts-history') || '[]');
@@ -95,6 +103,43 @@ function addSearchToHistory(query) {
   persistHistory();
 }
 
+const LANG_CANONICAL = new Map([
+  ['it', 'it-IT'], ['it-it', 'it-IT'],
+  ['en', 'en-US'], ['en-us', 'en-US'],
+  ['es', 'es-ES'], ['es-es', 'es-ES'],
+  ['fr', 'fr-FR'], ['fr-fr', 'fr-FR'],
+  ['de', 'de-DE'], ['de-de', 'de-DE'],
+  ['pt', 'pt-PT'], ['pt-pt', 'pt-PT'],
+  ['ru', 'ru-RU'], ['ru-ru', 'ru-RU'],
+  ['zh', 'zh-CN'], ['zh-cn', 'zh-CN'],
+  ['ja', 'ja-JP'], ['ja-jp', 'ja-JP'],
+]);
+
+function normalizeLangCode(raw) {
+  const key = String(raw || '').trim().toLowerCase();
+  return LANG_CANONICAL.get(key) || null;
+}
+
+function getResolvedLang() {
+  const selected = getLang();
+  if (selected && selected !== 'auto') return selected;
+  const browser = normalizeLangCode(navigator.language || navigator.languages?.[0] || '');
+  return browser || 'en-US';
+}
+
+function persistSelectedEngines() {
+  localStorage.setItem('ts-engines', JSON.stringify(state.selectedEngines.slice(0, 20)));
+}
+
+function setSelectedEngines(engines) {
+  state.selectedEngines = [...new Set(
+    (Array.isArray(engines) ? engines : [])
+      .map((engine) => String(engine || '').trim().toLowerCase())
+      .filter(Boolean)
+  )].slice(0, 20);
+  persistSelectedEngines();
+}
+
 // ─── SVG Icons ────────────────────────────────────────────────────────────
 function svg(paths, size = 16, extra = '') {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${paths}</svg>`;
@@ -164,6 +209,21 @@ const AI_PRESETS = [
   { id: 'llamacpp', label: 'llama.cpp server', api_base: 'http://127.0.0.1:8080/v1', keyRequired: false, defaultModel: '' },
 ];
 
+const ENGINE_GROUPS = [
+  { label: 'Web Core', items: ['duckduckgo', 'wikipedia', 'brave', 'startpage', 'qwant', 'mojeek', 'bing', 'google', 'yahoo'] },
+  { label: 'Code & Dev', items: ['github', 'github-api', 'hackernews', 'reddit'] },
+  { label: 'Media', items: ['youtube', 'sepiasearch'] },
+  { label: 'Research', items: ['wikidata', 'crossref', 'openalex', 'openlibrary'] },
+  { label: 'Federated', items: ['mastodon users', 'mastodon hashtags', 'tootfinder', 'lemmy communities', 'lemmy posts'] },
+  { label: 'Torrent', items: ['piratebay', '1337x', 'nyaa'] },
+];
+
+const ENGINE_PRESETS = [
+  { id: 'all', label: 'All', engines: [] },
+  { id: 'balanced', label: 'Balanced', engines: ['duckduckgo', 'wikipedia', 'bing', 'startpage', 'github', 'reddit', 'youtube'] },
+  { id: 'github', label: 'GitHub Focus', engines: ['github-api', 'github', 'duckduckgo', 'wikipedia'] },
+];
+
 function detectPresetFromBase(base) {
   const raw = String(base || '').toLowerCase();
   if (!raw) return 'custom';
@@ -179,10 +239,86 @@ function LangPicker() {
     if (l.code === getLang()) opt.selected = true;
     sel.append(opt);
   }
-  sel.addEventListener('change', () => { setLang(sel.value); });
+  sel.addEventListener('change', () => {
+    setLang(sel.value);
+    if (state.query) {
+      doSearch(state.query, state.category);
+    } else {
+      renderApp();
+    }
+  });
   const arrow = el('span', { className: 'lang-arrow', html: svg('<polyline points="6 9 12 15 18 9"/>', 12) });
   wrap.append(sel, arrow);
   return wrap;
+}
+
+function EnginePicker() {
+  const details = el('details', { className: 'engine-picker' });
+  const selectedCount = state.selectedEngines.length;
+  const summary = el('summary', { className: 'engine-picker-summary' },
+    el('span', { className: 'engine-picker-title' }, selectedCount ? `Engines (${selectedCount})` : 'Engines (all)'),
+    iconEl('chevron', 'engine-chevron'),
+  );
+
+  const body = el('div', { className: 'engine-picker-body' });
+  const presetRow = el('div', { className: 'engine-preset-row' });
+  ENGINE_PRESETS.forEach((preset) => {
+    presetRow.append(el('button', {
+      className: `btn ${preset.id === 'balanced' ? 'btn-primary' : ''}`,
+      type: 'button',
+      onClick: () => {
+        setSelectedEngines(preset.engines);
+        details.open = false;
+        if (state.query) doSearch(state.query, state.category);
+        else renderApp();
+      },
+    }, preset.label));
+  });
+  body.append(presetRow);
+
+  ENGINE_GROUPS.forEach((group) => {
+    const card = el('div', { className: 'engine-group' });
+    card.append(el('div', { className: 'engine-group-title' }, group.label));
+    const list = el('div', { className: 'engine-chip-wrap' });
+    group.items.forEach((engine) => {
+      const checked = state.selectedEngines.includes(engine);
+      const id = `engine-${engine.replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
+      const input = el('input', { id, type: 'checkbox', ...(checked ? { checked: '' } : {}) });
+      const label = el('label', { className: 'engine-chip', for: id }, input, el('span', {}, engine));
+      list.append(label);
+    });
+    card.append(list);
+    body.append(card);
+  });
+
+  body.append(el('div', { className: 'engine-actions' },
+    el('button', {
+      className: 'btn btn-primary',
+      type: 'button',
+      onClick: () => {
+        const selected = [...details.querySelectorAll('.engine-chip input:checked')]
+          .map((node) => node.parentElement?.textContent?.trim().toLowerCase())
+          .filter(Boolean);
+        setSelectedEngines(selected);
+        details.open = false;
+        if (state.query) doSearch(state.query, state.category);
+        else renderApp();
+      },
+    }, 'Apply'),
+    el('button', {
+      className: 'btn',
+      type: 'button',
+      onClick: () => {
+        setSelectedEngines([]);
+        details.open = false;
+        if (state.query) doSearch(state.query, state.category);
+        else renderApp();
+      },
+    }, 'Reset'),
+  ));
+
+  details.append(summary, body);
+  return details;
 }
 
 // ─── Search form ──────────────────────────────────────────────────────────
@@ -526,8 +662,11 @@ function flattenSocialResults(payload) {
   ].filter((item) => item.url);
 }
 
-async function runSearchProgressive(q, lang, category) {
+async function runSearchProgressive(q, lang, category, engines = []) {
   const params = new URLSearchParams({ q, lang, cat: category });
+  if (Array.isArray(engines) && engines.length > 0) {
+    params.set('engines', engines.join(','));
+  }
   const response = await fetch(`/api/search-stream?${params.toString()}`);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -599,11 +738,14 @@ async function doSearch(q, category = state.category) {
   state.socialData = [];
   renderApp();
 
-  const lang = getLang();
+  const lang = getResolvedLang();
+  const engines = state.selectedEngines.slice();
 
   try {
-    const searchPromise = runSearchProgressive(q, lang, state.category).catch(async () => {
-      return api(`/api/search?q=${encodeURIComponent(q)}&lang=${lang}&cat=${encodeURIComponent(state.category)}`);
+    const searchPromise = runSearchProgressive(q, lang, state.category, engines).catch(async () => {
+      const p = new URLSearchParams({ q, lang, cat: state.category });
+      if (engines.length > 0) p.set('engines', engines.join(','));
+      return api(`/api/search?${p.toString()}`);
     });
     const promises = [
       searchPromise,
@@ -732,6 +874,7 @@ function renderApp() {
       type: 'button',
     }, cat.label));
   });
+  categoryBar.append(EnginePicker());
 
   const main = el('div', { className: 'main' });
 
@@ -751,6 +894,7 @@ function renderApp() {
       const meta = el('div', { className: 'results-meta' });
       meta.append(document.createTextNode(`${state.results.length} results`));
       if (state.providers.length) meta.append(document.createTextNode(' · ' + state.providers.join(', ')));
+      if (state.selectedEngines.length) meta.append(document.createTextNode(' · engines: ' + state.selectedEngines.join(', ')));
       main.append(meta);
     }
 
@@ -785,7 +929,7 @@ function renderHome(app) {
     el('div', { className: 'home-logo' }, 'Term', el('strong', {}, 'Search')),
     el('div', { className: 'home-tagline' },
       el('span', { className: 'tagline-desktop' }, 'Personal search engine · privacy-first · local-first'),
-      el('span', { className: 'tagline-mobile' }, 'Private search · local-first'),
+      el('span', { className: 'tagline-mobile' }, 'Private local search'),
     ),
     el('div', { className: 'home-search' }, SearchForm('', (q) => { state.query = q; state.category = 'web'; doSearch(q, 'web'); })),
     el('div', { className: 'home-actions' },
@@ -857,8 +1001,13 @@ async function renderSettings() {
     presetSelect.append(opt);
   });
   const modelInput = makeInput('ai-model', ai.model, 'qwen3.5:4b');
-  modelInput.setAttribute('list', 'ai-model-list');
-  const modelDataList = el('datalist', { id: 'ai-model-list' });
+  const modelSelect = el('select', { className: 'form-input', id: 'ai-model-select' },
+    el('option', { value: '' }, 'Load models first…')
+  );
+  const modelQuickList = el('div', { id: 'ai-model-quick-list', className: 'model-quick-list' },
+    el('div', { className: 'form-hint' }, 'No models loaded.')
+  );
+  let loadedModels = [];
 
   function setModelStatus(message, type = 'info') {
     aiModelStatus.style.display = 'block';
@@ -879,9 +1028,31 @@ async function renderSettings() {
   }
 
   function populateModelList(models) {
-    modelDataList.innerHTML = '';
+    loadedModels = models.slice();
+    modelSelect.innerHTML = '';
     for (const model of models) {
-      modelDataList.append(el('option', { value: model }));
+      modelSelect.append(el('option', { value: model }, model));
+    }
+    modelQuickList.innerHTML = '';
+    models.forEach((model) => {
+      modelQuickList.append(el('button', {
+        className: 'model-chip-btn',
+        type: 'button',
+        onClick: () => {
+          const modelField = document.getElementById('ai-model');
+          if (modelField) modelField.value = model;
+          modelSelect.value = model;
+          [...modelQuickList.querySelectorAll('.model-chip-btn')].forEach((n) => n.classList.remove('active'));
+          const active = [...modelQuickList.querySelectorAll('.model-chip-btn')].find((n) => n.textContent === model);
+          if (active) active.classList.add('active');
+        },
+      }, model));
+    });
+    const current = val('ai-model');
+    if (current && models.includes(current)) {
+      modelSelect.value = current;
+      const active = [...modelQuickList.querySelectorAll('.model-chip-btn')].find((n) => n.textContent === current);
+      if (active) active.classList.add('active');
     }
   }
 
@@ -911,6 +1082,11 @@ async function renderSettings() {
       const models = Array.isArray(res.models) ? res.models : [];
       if (!models.length) {
         setModelStatus(`No models found${res.provider ? ` for ${res.provider}` : ''}.`, 'err');
+        modelSelect.innerHTML = '';
+        modelSelect.append(el('option', { value: '' }, 'No models found'));
+        modelQuickList.innerHTML = '';
+        modelQuickList.append(el('div', { className: 'form-hint' }, 'No models loaded.'));
+        loadedModels = [];
         return;
       }
       populateModelList(models);
@@ -918,6 +1094,7 @@ async function renderSettings() {
       if (!current || !models.includes(current)) {
         const modelField = document.getElementById('ai-model');
         if (modelField) modelField.value = models[0];
+        modelSelect.value = models[0];
       }
       setModelStatus(`Loaded ${models.length} model(s)${res.provider ? ` from ${res.provider}` : ''}.`, 'ok');
     } catch (e) {
@@ -1114,7 +1291,9 @@ async function renderSettings() {
       el('div', { className: 'form-group' },
         el('label', { className: 'form-label', for: 'ai-model' }, 'Model'),
         modelInput,
-        modelDataList,
+        el('div', { className: 'form-hint', style: 'margin-top:4px' }, 'Model list (tap to open):'),
+        modelSelect,
+        modelQuickList,
         el('div', { className: 'form-row', style: 'margin-top:6px' },
           el('button', { id: 'ai-load-models-btn', className: 'btn', onClick: () => loadModels('manual'), type: 'button' }, 'Load models'),
           el('span', { className: 'form-hint', style: 'margin-top:0' }, 'Auto-loads from endpoint with current key.'),
@@ -1216,7 +1395,7 @@ async function renderSettings() {
     // Server info
     el('div', { className: 'settings-section' },
       el('h2', {}, 'Server Info'),
-      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.1')),
+      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.2')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Active providers'), el('span', { className: 'info-val' }, (health?.providers || []).join(', ') || 'none')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'AI'),               el('span', { className: 'info-val' }, health?.ai_enabled ? `enabled (${health.ai_model})` : 'not configured')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'GitHub'),           el('a', { href: 'https://github.com/DioNanos/termsearch', target: '_blank', className: 'info-val', style: 'color:var(--link)' }, 'DioNanos/termsearch')),
@@ -1247,6 +1426,27 @@ async function renderSettings() {
   document.getElementById('history-enabled')?.addEventListener('change', (e) => {
     setHistoryEnabled(Boolean(e.target?.checked));
     renderHistoryPreview();
+  });
+  modelSelect.addEventListener('change', () => {
+    if (!modelSelect.value) return;
+    const modelField = document.getElementById('ai-model');
+    if (modelField) modelField.value = modelSelect.value;
+    [...modelQuickList.querySelectorAll('.model-chip-btn')].forEach((n) => {
+      n.classList.toggle('active', n.textContent === modelSelect.value);
+    });
+  });
+  modelSelect.addEventListener('focus', () => {
+    if (!loadedModels.length) loadModels('auto');
+  });
+  modelInput.addEventListener('input', () => {
+    const current = modelInput.value || '';
+    if ([...modelSelect.options].some((opt) => opt.value === current)) {
+      modelSelect.value = modelInput.value;
+    }
+    [...modelQuickList.querySelectorAll('.model-chip-btn')].forEach((n) => {
+      n.classList.toggle('active', n.textContent === current);
+      n.style.display = !current || n.textContent.toLowerCase().includes(current.toLowerCase()) ? 'inline-flex' : 'none';
+    });
   });
   document.getElementById('ai-key')?.addEventListener('change', () => loadModels('auto'));
   document.getElementById('ai-base')?.addEventListener('change', () => loadModels('auto'));

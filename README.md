@@ -1,6 +1,6 @@
 # TermSearch - Personal Search Engine
 
-[![Status](https://img.shields.io/badge/Status-0.3.1-blue.svg)](#project-status)
+[![Status](https://img.shields.io/badge/Status-0.3.2-blue.svg)](#project-status)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
 [![Target](https://img.shields.io/badge/Target-Termux%20%2F%20Linux%20%2F%20macOS-green.svg)](https://termux.dev)
@@ -12,7 +12,9 @@ Zero external dependencies, no Docker, no Python. AI is optional and configured 
 Core capabilities:
 
 - Zero-config search via DuckDuckGo and Wikipedia — works immediately after install
+- Built-in GitHub Search API fallback (`github-api`) and selectable engine mix from UI
 - Progressive enhancement: add Brave/Mojeek API keys, AI endpoints, or SearXNG when needed
+- Search history persistence (opt-in toggle in Settings)
 - Social profile scanner: GitHub, Bluesky, Reddit, Twitter/X, Instagram, YouTube, LinkedIn, TikTok, Telegram, Facebook
 - Torrent search: The Pirate Bay + 1337x with direct magnet extraction
 - Social search: Bluesky posts/actors + GDELT news
@@ -22,7 +24,7 @@ Core capabilities:
 
 ## Project Status
 
-- Current line: `0.3.1`
+- Current line: `0.3.2`
 - Core is MIT — zero required API keys
 - AI features are optional, configured via Settings page in browser
 - Tested on: Ubuntu 24.04, Termux (Android 15/16)
@@ -89,8 +91,11 @@ Configure at **Settings → AI** in the browser. Supported endpoints:
 |----------|----------|-------|-----|
 | **Localhost** (Ollama) | `http://localhost:11434/v1` | `qwen3.5:4b` or any | not required |
 | **Localhost** (LM Studio) | `http://localhost:1234/v1` | your loaded model | not required |
+| **Localhost** (llama.cpp) | `http://localhost:8080/v1` | your loaded model | not required |
 | **Chutes.ai TEE** | `https://llm.chutes.ai/v1` | `deepseek-ai/DeepSeek-V3.2-TEE` | required |
+| **Anthropic** | `https://api.anthropic.com/v1` | `claude-3-5-haiku-latest` | required |
 | **OpenAI** | `https://api.openai.com/v1` | `gpt-4o-mini` | required |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | any listed model | required |
 | **API custom** | any OpenAI-compatible URL | your model | optional |
 
 All providers use the OpenAI-compatible `/chat/completions` format. Leave API key empty for local models.
@@ -107,7 +112,7 @@ All providers use the OpenAI-compatible `/chat/completions` format. Leave API ke
 src/
   config/           config manager — load/save/defaults/env overrides
   search/
-    providers/      DuckDuckGo, Wikipedia, Brave, Mojeek, SearXNG
+    providers/      DuckDuckGo, Wikipedia, Brave, Mojeek, SearXNG, GitHub API
     engine.js       fan-out, merge, rank, cache
     ranking.js      source diversity ranking
     cache.js        tiered cache (L1 Map + L2 disk JSON)

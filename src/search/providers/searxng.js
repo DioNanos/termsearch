@@ -9,7 +9,7 @@ function mapCategory(category) {
 
 export async function search({ query, lang = 'en-US', safe = '1', page = 1, category = 'web', engines = [], config, timeoutMs = 15000 }) {
   const searxngUrl = config?.searxng?.url;
-  if (!searxngUrl) return [];
+  if (!searxngUrl) return { results: [], _meta: { error: 'searxng_not_configured' } };
 
   const base = searxngUrl.replace(/\/$/, '');
   const params = new URLSearchParams({
@@ -35,19 +35,29 @@ export async function search({ query, lang = 'en-US', safe = '1', page = 1, cate
       signal: ac.signal,
     });
     clearTimeout(timer);
-    if (!r.ok) return [];
+    if (!r.ok) return { results: [], _meta: { error: `searxng_http_${r.status}` } };
     const data = await r.json();
-    return (data?.results || []).map((item) => ({
+    const results = (data?.results || []).map((item) => ({
       title: item.title || '',
       url: item.url || '',
       snippet: item.content || '',
-      engine: item.engine ? `searxng:${item.engine}` : 'searxng',
+      engine: item.engine ? String(item.engine).toLowerCase() : 'searxng',
       score: Number(item.score || 0),
       publishedDate: item.publishedDate || null,
       thumbnail_src: item.thumbnail || null,
     }));
+    const unresponsive = Array.isArray(data?.unresponsive_engines)
+      ? data.unresponsive_engines.map((entry) => (Array.isArray(entry) ? String(entry[0] || '').toLowerCase() : String(entry || '').toLowerCase())).filter(Boolean)
+      : [];
+    const unresponsiveDetails = Array.isArray(data?.unresponsive_engines)
+      ? data.unresponsive_engines.map((entry) => ({
+          engine: Array.isArray(entry) ? String(entry[0] || '').toLowerCase() : String(entry || '').toLowerCase(),
+          reason: Array.isArray(entry) ? String(entry[1] || '') : '',
+        })).filter((entry) => entry.engine)
+      : [];
+    return { results, _meta: { unresponsive, unresponsiveDetails } };
   } catch {
     clearTimeout(timer);
-    return [];
+    return { results: [], _meta: { error: 'searxng_unreachable' } };
   }
 }
