@@ -1180,11 +1180,12 @@ function renderApp() {
 
 // ─── Homepage ─────────────────────────────────────────────────────────────
 function addToBrowser() {
+  let attemptedLegacyAdd = false;
   // Try legacy Firefox API
   try {
     if (window.external?.AddSearchProvider) {
+      attemptedLegacyAdd = true;
       window.external.AddSearchProvider(location.origin + '/opensearch.xml');
-      return;
     }
   } catch {}
   // Show inline hint
@@ -1199,6 +1200,7 @@ function addToBrowser() {
   urlBox.append(urlText, copyBtn);
   const hint = el('div', { className: 'add-browser-hint' },
     el('div', { className: 'add-browser-title' }, 'Add TermSearch to your browser'),
+    attemptedLegacyAdd ? el('div', { className: 'add-browser-note' }, 'If no browser prompt appears, add it manually with the URL below.') : null,
     el('div', { className: 'add-browser-steps' },
       el('div', {}, el('span', { className: 'add-browser-badge' }, 'Firefox'), ' Address bar → click TermSearch icon → "Add"'),
       el('div', {}, el('span', { className: 'add-browser-badge' }, 'Chrome'), ' Settings → Search engine → Manage → Add'),
@@ -1207,7 +1209,10 @@ function addToBrowser() {
     el('div', { className: 'add-browser-label' }, 'Search URL (paste in browser settings):'),
     urlBox,
   );
-  document.querySelector('.footer')?.after(hint);
+  const footer = document.querySelector('.footer');
+  if (footer) footer.before(hint);
+  else document.getElementById('app')?.append(hint);
+  hint.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   setTimeout(() => hint.remove(), 20000);
 }
 

@@ -1005,6 +1005,11 @@ a:hover { color: var(--link-h); }
   color: var(--text);
   margin-bottom: 10px;
 }
+.add-browser-note {
+  margin-bottom: 10px;
+  font-size: 11px;
+  color: #c4b5fd;
+}
 .add-browser-steps {
   display: flex;
   flex-direction: column;

@@ -1,6 +1,6 @@
 # TermSearch
 
-[![Version](https://img.shields.io/badge/version-0.3.8-blue.svg)](#)
+[![Version](https://img.shields.io/npm/v/termsearch.svg)](https://www.npmjs.com/package/termsearch)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
 [![Platform](https://img.shields.io/badge/Termux%20%7C%20Linux%20%7C%20macOS-green.svg)](#)
