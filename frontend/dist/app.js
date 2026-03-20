@@ -9,6 +9,15 @@ const state = {
   aiStatus: 'idle',
   aiError: null,
   aiMeta: null,
+  aiProgress: 0,
+  aiSteps: [],
+  aiSources: [],
+  aiExpanded: false,
+  aiStartTime: null,
+  aiLatencyMs: null,
+  aiLastQuery: null,
+  aiLastResults: null,
+  aiLastLang: null,
   profilerData: null,
   profilerLoading: false,
   torrentData: [],
@@ -140,6 +149,16 @@ function setSelectedEngines(engines) {
   persistSelectedEngines();
 }
 
+function sanitizeHttpUrl(raw) {
+  try {
+    const url = new URL(String(raw || '').trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.toString();
+  } catch {
+    return '';
+  }
+}
+
 // ─── SVG Icons ────────────────────────────────────────────────────────────
 function svg(paths, size = 16, extra = '') {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${extra}>${paths}</svg>`;
@@ -200,17 +219,18 @@ const LANGS = [
 ];
 
 const AI_PRESETS = [
-  { id: 'openai', label: 'OpenAI', api_base: 'https://api.openai.com/v1', keyRequired: true, defaultModel: 'gpt-4o-mini' },
-  { id: 'chutes', label: 'Chutes.ai', api_base: 'https://llm.chutes.ai/v1', keyRequired: true, defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
-  { id: 'openrouter', label: 'OpenRoute/OpenRouter', api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
-  { id: 'anthropic', label: 'Anthropic', api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
-  { id: 'ollama', label: 'Ollama', api_base: 'http://127.0.0.1:11434/v1', keyRequired: false, defaultModel: 'qwen3.5:4b' },
-  { id: 'lmstudio', label: 'LM Studio', api_base: 'http://127.0.0.1:1234/v1', keyRequired: false, defaultModel: '' },
-  { id: 'llamacpp', label: 'llama.cpp server', api_base: 'http://127.0.0.1:8080/v1', keyRequired: false, defaultModel: '' },
+  { id: 'ollama',   label: 'LocalHost — Ollama',       api_base: 'http://127.0.0.1:11434/v1', keyRequired: false, defaultModel: 'qwen3.5:4b' },
+  { id: 'lmstudio', label: 'LocalHost — LM Studio',    api_base: 'http://127.0.0.1:1234/v1',  keyRequired: false, defaultModel: '' },
+  { id: 'llamacpp', label: 'LocalHost — llama.cpp',    api_base: 'http://127.0.0.1:8080/v1',  keyRequired: false, defaultModel: '' },
+  { id: 'chutes',   label: 'Chutes.ai TEE',            api_base: 'https://llm.chutes.ai/v1',  keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
+  { id: 'anthropic',label: 'Anthropic',                api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
+  { id: 'openai',   label: 'OpenAI',                   api_base: 'https://api.openai.com/v1', keyRequired: true,  defaultModel: 'gpt-4o-mini' },
+  { id: 'openrouter', label: 'OpenRoute/OpenRouter',   api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
 ];
 
 const ENGINE_GROUPS = [
   { label: 'Web Core', items: ['duckduckgo', 'wikipedia', 'brave', 'startpage', 'qwant', 'mojeek', 'bing', 'google', 'yahoo'] },
+  { label: 'Uncensored', items: ['yandex', 'marginalia', 'ahmia'] },
   { label: 'Code & Dev', items: ['github', 'github-api', 'hackernews', 'reddit'] },
   { label: 'Media', items: ['youtube', 'sepiasearch'] },
   { label: 'Research', items: ['wikidata', 'crossref', 'openalex', 'openlibrary'] },
@@ -419,37 +439,96 @@ function renderAiPanel() {
   if (!isActive) { panel.style.display = 'none'; return; }
   panel.style.display = 'block';
 
-  const dotsClass = state.aiStatus === 'done' ? 'done' : state.aiStatus === 'error' ? 'error' : '';
-  const statusText = state.aiStatus === 'loading' ? 'Thinking…' : state.aiStatus === 'streaming' ? 'Generating…' : state.aiStatus === 'done' ? 'AI Summary' : 'Error';
+  const isLoading = state.aiStatus === 'loading' || state.aiStatus === 'streaming';
+  const isDone    = state.aiStatus === 'done';
+  const isError   = state.aiStatus === 'error';
+  const dotsClass = isDone ? 'done' : isError ? 'error' : '';
+  const statusText = state.aiStatus === 'loading' ? 'Thinking…'
+    : state.aiStatus === 'streaming' ? 'Generating…'
+    : isDone ? 'AI Summary' : 'Error';
 
+  // Dots
   const dotsEl = el('div', { className: 'ai-dots' });
   ['violet', 'indigo', 'dim'].forEach(c => {
     dotsEl.append(el('div', { className: `ai-dot ${dotsClass || c}` }));
   });
 
-  const header = el('div', { className: 'panel-header' },
-    el('div', { className: 'panel-header-left' },
-      dotsEl,
-      el('span', { className: 'panel-label' }, statusText),
-      state.aiMeta?.model ? el('span', { style: 'font-size:10px;color:var(--text3);margin-left:6px' }, state.aiMeta.model) : null,
-    ),
-  );
+  // Latency
+  const latMs = state.aiLatencyMs;
+  const latLabel = latMs != null ? (latMs < 1000 ? `${latMs}ms` : `${(latMs / 1000).toFixed(1)}s`) : null;
 
-  const content = el('div', { className: 'ai-content' });
-  if (state.aiError) {
-    content.style.color = '#f87171';
-    content.textContent = state.aiError;
+  // Header
+  const headerLeft = el('div', { className: 'panel-header-left' },
+    dotsEl,
+    el('span', { className: 'panel-label' }, statusText),
+    state.aiMeta?.model ? el('span', { className: 'ai-model-label' }, state.aiMeta.model) : null,
+    latLabel ? el('span', { className: 'ai-latency-label' }, `· ${latLabel}`) : null,
+  );
+  const chevronPath = state.aiExpanded ? '<polyline points="18 15 12 9 6 15"/>' : '<polyline points="6 9 12 15 18 9"/>';
+  const expandBtn = el('button', { className: 'ai-expand-btn', type: 'button', title: state.aiExpanded ? 'Collapse' : 'Expand' });
+  expandBtn.innerHTML = svg(chevronPath, 14);
+  expandBtn.onclick = () => { state.aiExpanded = !state.aiExpanded; renderAiPanel(); };
+  const header = el('div', { className: 'panel-header' }, headerLeft, expandBtn);
+
+  // Progress bar
+  const showProgress = isLoading && state.aiProgress > 0;
+  const progressEl = showProgress ? el('div', { className: 'ai-progress-wrap' },
+    el('div', { className: 'ai-progress-bar', style: `width:${state.aiProgress}%` }),
+  ) : null;
+
+  // Steps
+  const showSteps = isLoading && state.aiSteps.length > 0;
+  const stepsEl = showSteps ? el('div', { className: 'ai-steps' },
+    ...state.aiSteps.slice(-4).map(s => el('div', { className: 'ai-step' }, s)),
+  ) : null;
+
+  // Content
+  const contentEl = el('div', { className: `ai-content${!state.aiExpanded && !isLoading ? ' ai-content-collapsed' : ''}` });
+  if (isError) {
+    contentEl.style.color = '#f87171';
+    contentEl.textContent = state.aiError;
   } else {
-    content.textContent = state.aiSummary;
+    contentEl.textContent = state.aiSummary;
   }
+
+  // Sources (shown when expanded + done)
+  const showSources = isDone && state.aiExpanded && state.aiSources.length > 0;
+  const sourcesEl = showSources ? el('div', { className: 'ai-sources' },
+    ...state.aiSources.slice(0, 8).map((src, i) => {
+      const safeSrc = sanitizeHttpUrl(src);
+      if (!safeSrc) return null;
+      let label = src;
+      try {
+        const { hostname, pathname } = new URL(safeSrc);
+        const host = hostname.replace(/^www\./, '');
+        const segs = pathname.replace(/\/$/, '').split('/').filter(Boolean).slice(0, 2);
+        label = segs.length ? `${host} › ${segs.join('/')}` : host;
+      } catch {}
+      const a = el('a', { className: 'ai-source-pill', href: safeSrc, target: '_blank', rel: 'noopener noreferrer' }, `[${i + 1}] ${label}`);
+      return a;
+    }),
+  ) : null;
+
+  // Footer: retry + expand/collapse
+  const retryBtn = el('button', { className: 'ai-retry-btn', type: 'button' }, 'Retry');
+  retryBtn.onclick = () => {
+    if (state.aiLastQuery) startAiSummary(state.aiLastQuery, state.aiLastResults || [], state.aiLastLang || 'en-US');
+  };
+  const toggleBtn = el('button', { className: 'ai-toggle-btn', type: 'button' },
+    state.aiExpanded ? 'Show less' : 'Show more',
+  );
+  toggleBtn.onclick = () => { state.aiExpanded = !state.aiExpanded; renderAiPanel(); };
+  const footer = el('div', { className: 'ai-footer' }, retryBtn, toggleBtn);
 
   panel.innerHTML = '';
-  panel.append(header, content);
+  panel.append(header);
+  if (progressEl) panel.append(progressEl);
+  if (stepsEl)    panel.append(stepsEl);
+  panel.append(contentEl);
+  if (sourcesEl)  panel.append(sourcesEl);
+  panel.append(footer);
 
-  if (state.aiMeta?.fetchedCount) {
-    panel.append(el('div', { className: 'ai-meta' }, `Read ${state.aiMeta.fetchedCount} pages`));
-  }
-  if (state.aiStatus === 'streaming') {
+  if (state.aiStatus === 'streaming' && state.aiSummary.length < 60) {
     panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 }
@@ -793,6 +872,15 @@ async function doSearch(q, category = state.category) {
 async function startAiSummary(query, results, lang) {
   state.aiStatus = 'loading';
   state.aiSummary = '';
+  state.aiError = null;
+  state.aiProgress = 0;
+  state.aiSteps = [];
+  state.aiSources = [];
+  state.aiStartTime = Date.now();
+  state.aiLatencyMs = null;
+  state.aiLastQuery = query;
+  state.aiLastResults = results;
+  state.aiLastLang = lang;
   renderAiPanel();
 
   try {
@@ -819,13 +907,22 @@ async function startAiSummary(query, results, lang) {
         if (!line.startsWith('data: ')) continue;
         try {
           const d = JSON.parse(line.slice(6));
-          if (d.chunk)          { state.aiSummary += d.chunk; renderAiPanel(); }
-          else if (d.error)     { state.aiStatus = 'error'; state.aiError = d.message || d.error; renderAiPanel(); }
-          else if (d.model || d.sites) { state.aiStatus = 'done'; state.aiMeta = { fetchedCount: d.fetchedCount, model: d.model }; renderAiPanel(); }
+          if (d.chunk !== undefined)    { state.aiSummary += d.chunk; renderAiPanel(); }
+          else if (d.progress !== undefined) { state.aiProgress = d.progress; renderAiPanel(); }
+          else if (d.step)              { state.aiSteps = [...state.aiSteps.slice(-3), d.step]; renderAiPanel(); }
+          else if (d.error)             { state.aiStatus = 'error'; state.aiError = d.message || d.error; renderAiPanel(); }
+          else if (d.model != null || d.sites != null) {
+            state.aiStatus = 'done';
+            state.aiProgress = 100;
+            state.aiSources = Array.isArray(d.sites) ? d.sites.map(sanitizeHttpUrl).filter(Boolean) : [];
+            state.aiMeta = { fetchedCount: d.fetchedCount, model: d.model };
+            state.aiLatencyMs = Date.now() - state.aiStartTime;
+            renderAiPanel();
+          }
         } catch { /* ignore */ }
       }
     }
-    if (state.aiStatus === 'streaming') { state.aiStatus = 'done'; renderAiPanel(); }
+    if (state.aiStatus === 'streaming') { state.aiStatus = 'done'; state.aiLatencyMs = Date.now() - state.aiStartTime; renderAiPanel(); }
   } catch (e) {
     state.aiStatus = 'error';
     state.aiError = e.message;
@@ -1278,7 +1375,7 @@ async function renderSettings() {
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Included presets: Chutes.ai · Anthropic · OpenAI · OpenRoute/OpenRouter · llama.cpp · Ollama · LM Studio',
+          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI · OpenRoute/OpenRouter',
           el('br', {}),
           'You can also keep custom OpenAI-compatible endpoints.',
         ),
@@ -1395,7 +1492,7 @@ async function renderSettings() {
     // Server info
     el('div', { className: 'settings-section' },
       el('h2', {}, 'Server Info'),
-      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.2')),
+      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.3')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Active providers'), el('span', { className: 'info-val' }, (health?.providers || []).join(', ') || 'none')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'AI'),               el('span', { className: 'info-val' }, health?.ai_enabled ? `enabled (${health.ai_model})` : 'not configured')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'GitHub'),           el('a', { href: 'https://github.com/DioNanos/termsearch', target: '_blank', className: 'info-val', style: 'color:var(--link)' }, 'DioNanos/termsearch')),

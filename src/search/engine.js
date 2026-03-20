@@ -9,6 +9,9 @@ import * as brave from './providers/brave.js';
 import * as mojeek from './providers/mojeek.js';
 import * as searxng from './providers/searxng.js';
 import * as github from './providers/github.js';
+import * as yandex from './providers/yandex.js';
+import * as ahmia from './providers/ahmia.js';
+import * as marginalia from './providers/marginalia.js';
 
 let _searchCache = null;
 let _docCache = null;
@@ -49,6 +52,10 @@ export const ALLOWED_ENGINES = new Set([
   '1337x',
   'piratebay',
   'nyaa',
+  // uncensored / alternative index engines
+  'yandex',
+  'ahmia',
+  'marginalia',
   // local aliases for direct providers
   'ddg',
   'wiki',
@@ -94,6 +101,24 @@ const PROVIDER_REGISTRY = {
     aliases: new Set(['github', 'github-api']),
     enabled: (_cfg) => true,
     run: github.search,
+    defaultProvider: false,
+  },
+  yandex: {
+    aliases: new Set(['yandex']),
+    enabled: (cfg) => cfg?.yandex?.enabled !== false,
+    run: yandex.search,
+    defaultProvider: false,
+  },
+  ahmia: {
+    aliases: new Set(['ahmia']),
+    enabled: (cfg) => cfg?.ahmia?.enabled !== false,
+    run: ahmia.search,
+    defaultProvider: false,
+  },
+  marginalia: {
+    aliases: new Set(['marginalia']),
+    enabled: (cfg) => cfg?.marginalia?.enabled !== false,
+    run: marginalia.search,
     defaultProvider: false,
   },
 };
@@ -162,10 +187,7 @@ function resolveProviderPlan(cfg, requestedEngines = [], category = 'web') {
 
   const providers = [...explicitProviders].filter((name) => enabledProviders.includes(name));
   if (providers.length === 0) {
-    return {
-      providers: defaultProviders,
-      searxEngines: category === 'web' && defaultProviders.includes('searxng') ? CURATED_WEB_ENGINES.slice() : [],
-    };
+    return { providers: [], searxEngines: [] };
   }
 
   return { providers, searxEngines };
@@ -301,6 +323,7 @@ async function runProviderDetailed(name, args) {
     const responded = new Set();
     const failed = new Set();
     const failedDetails = [];
+    const skipHealth = new Set();
 
     if (name === 'searxng') {
       const unresponsive = Array.isArray(meta.unresponsive) ? meta.unresponsive.map((engine) => normalizeEngineName(engine)).filter(Boolean) : [];
@@ -327,9 +350,15 @@ async function runProviderDetailed(name, args) {
       failedDetails.push({ engine: name, reason: String(meta.error) });
     } else {
       responded.add(name);
+      if (results.length === 0 || meta.skipHealth === true || meta.empty === true) {
+        skipHealth.add(name);
+      }
     }
 
-    for (const engine of responded) recordEngineOutcome(engine, true);
+    for (const engine of responded) {
+      if (skipHealth.has(engine)) continue;
+      recordEngineOutcome(engine, true);
+    }
     for (const detail of failedDetails) recordEngineOutcome(detail.engine, false, detail.reason);
 
     return {
@@ -558,5 +587,8 @@ export function getEnabledProviders(cfg) {
   if (cfg.mojeek?.enabled && cfg.mojeek?.api_key) providers.push('mojeek');
   if (cfg.searxng?.enabled && cfg.searxng?.url) providers.push('searxng');
   providers.push('github-api');
+  if (cfg?.yandex?.enabled !== false) providers.push('yandex');
+  if (cfg?.ahmia?.enabled !== false) providers.push('ahmia');
+  if (cfg?.marginalia?.enabled !== false) providers.push('marginalia');
   return providers;
 }

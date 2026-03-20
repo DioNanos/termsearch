@@ -91,6 +91,12 @@ class ConfigManager {
     if (process.env.TERMSEARCH_MOJEEK_API_KEY) {
       overrides.mojeek = { api_key: process.env.TERMSEARCH_MOJEEK_API_KEY, enabled: true };
     }
+    if (process.env.TERMSEARCH_MARGINALIA_API_KEY) {
+      overrides.marginalia = { api_key: process.env.TERMSEARCH_MARGINALIA_API_KEY, enabled: true };
+    }
+    if (process.env.TERMSEARCH_MARGINALIA_API_BASE) {
+      overrides.marginalia = { ...(overrides.marginalia || {}), api_base: process.env.TERMSEARCH_MARGINALIA_API_BASE, enabled: true };
+    }
     if (process.env.TERMSEARCH_SEARXNG_URL) {
       overrides.searxng = { url: process.env.TERMSEARCH_SEARXNG_URL, enabled: true };
     }
@@ -113,6 +119,9 @@ class ConfigManager {
     if (safePartial?.mojeek?.api_key && !safePartial?.mojeek?.hasOwnProperty('enabled')) {
       this._config.mojeek.enabled = Boolean(this._config.mojeek.api_key);
     }
+    if (safePartial?.marginalia?.api_key && !safePartial?.marginalia?.hasOwnProperty('enabled')) {
+      this._config.marginalia.enabled = Boolean(this._config.marginalia.api_key);
+    }
     if (safePartial?.searxng?.url && !safePartial?.searxng?.hasOwnProperty('enabled')) {
       this._config.searxng.enabled = Boolean(this._config.searxng.url);
     }
@@ -120,7 +129,7 @@ class ConfigManager {
   }
 
   _sanitizeSensitiveKeys(partial) {
-    const sections = ['ai', 'brave', 'mojeek'];
+    const sections = ['ai', 'brave', 'mojeek', 'marginalia'];
     for (const section of sections) {
       const block = partial?.[section];
       if (!block || typeof block !== 'object' || !Object.prototype.hasOwnProperty.call(block, 'api_key')) continue;
@@ -173,6 +182,7 @@ class ConfigManager {
       ai: { ...c.ai, api_key: maskKey(c.ai.api_key) },
       brave: { ...c.brave, api_key: maskKey(c.brave.api_key) },
       mojeek: { ...c.mojeek, api_key: maskKey(c.mojeek.api_key) },
+      marginalia: { ...c.marginalia, api_key: maskKey(c.marginalia.api_key) },
     };
   }
 }

@@ -1,6 +1,6 @@
 # TermSearch - Personal Search Engine
 
-[![Status](https://img.shields.io/badge/Status-0.3.2-blue.svg)](#project-status)
+[![Status](https://img.shields.io/badge/Status-0.3.3-blue.svg)](#project-status)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
 [![Target](https://img.shields.io/badge/Target-Termux%20%2F%20Linux%20%2F%20macOS-green.svg)](https://termux.dev)
@@ -24,7 +24,7 @@ Core capabilities:
 
 ## Project Status
 
-- Current line: `0.3.2`
+- Current line: `0.3.3`
 - Core is MIT — zero required API keys
 - AI features are optional, configured via Settings page in browser
 - Tested on: Ubuntu 24.04, Termux (Android 15/16)
@@ -112,7 +112,7 @@ All providers use the OpenAI-compatible `/chat/completions` format. Leave API ke
 src/
   config/           config manager — load/save/defaults/env overrides
   search/
-    providers/      DuckDuckGo, Wikipedia, Brave, Mojeek, SearXNG, GitHub API
+    providers/      DuckDuckGo, Wikipedia, Brave, Mojeek, SearXNG, GitHub API, Yandex, Ahmia, Marginalia
     engine.js       fan-out, merge, rank, cache
     ranking.js      source diversity ranking
     cache.js        tiered cache (L1 Map + L2 disk JSON)
@@ -177,6 +177,8 @@ TERMSEARCH_AI_API_KEY=
 TERMSEARCH_AI_MODEL=glm-4.7
 TERMSEARCH_BRAVE_API_KEY=
 TERMSEARCH_MOJEEK_API_KEY=
+TERMSEARCH_MARGINALIA_API_KEY=public
+TERMSEARCH_MARGINALIA_API_BASE=https://api2.marginalia-search.com
 TERMSEARCH_SEARXNG_URL=
 TERMSEARCH_GITHUB_TOKEN=
 TERMSEARCH_INSTAGRAM_SESSION=

@@ -49,6 +49,20 @@ export const DEFAULTS = {
     api_base: 'https://api.mojeek.com',
   },
 
+  yandex: {
+    enabled: true,
+  },
+
+  ahmia: {
+    enabled: true,
+  },
+
+  marginalia: {
+    enabled: true,
+    api_key: 'public',
+    api_base: 'https://api2.marginalia-search.com',
+  },
+
   searxng: {
     enabled: false,
     url: '',  // e.g. http://localhost:9090

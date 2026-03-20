@@ -11,7 +11,7 @@ import { detectProfileTarget, scanProfile, PROFILER_PLATFORMS } from '../profile
 import { fetchBlueskyPosts, fetchBlueskyActors, fetchGdeltArticles } from '../social/search.js';
 import { scrapeTPB, scrape1337x, extractMagnetFromUrl } from '../torrent/scrapers.js';
 
-const APP_VERSION = '0.3.2';
+const APP_VERSION = '0.3.3';
 const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news']);
 const ALLOWED_LANGS = new Set(['auto', 'it-IT', 'en-US', 'es-ES', 'fr-FR', 'de-DE', 'pt-PT', 'ru-RU', 'zh-CN', 'ja-JP']);
 
@@ -409,7 +409,9 @@ export function createRouter(config, rateLimiters) {
       const result = await generateSummary(
         {
           query, lang, results, session,
-          onToken: (chunk) => sendEvent('token', { chunk }),
+          onToken:    (chunk) => sendEvent('token',    { chunk }),
+          onProgress: (p)     => sendEvent('progress', { progress: p }),
+          onStep:     (text)  => sendEvent('step',     { step: text }),
           docCache: getDocCache(),
         },
         cfg.ai
@@ -450,7 +452,7 @@ export function createRouter(config, rateLimiters) {
       return sendJson(res, 400, { error: 'invalid_body' });
     }
     // Whitelist accepted config keys to prevent unexpected writes
-    const allowed = ['port', 'host', 'ai', 'brave', 'mojeek', 'searxng', 'search', 'rate_limit'];
+    const allowed = ['port', 'host', 'ai', 'brave', 'mojeek', 'yandex', 'ahmia', 'marginalia', 'searxng', 'search', 'rate_limit'];
     const filtered = {};
     for (const key of allowed) {
       if (key in body) filtered[key] = body[key];

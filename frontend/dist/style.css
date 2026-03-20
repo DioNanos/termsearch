@@ -565,6 +565,22 @@ a:hover { color: var(--link-h); }
 .ai-dot.dim    { background: #5b21b6; animation: pulse 1.4s ease-in-out 300ms infinite; }
 .ai-dot.done   { background: #34d399; animation: none; }
 .ai-dot.error  { background: #f87171; animation: none; }
+.panel-ai .panel-header { cursor: default; }
+.ai-model-label  { font-size: 10px; color: var(--text3); margin-left: 6px; }
+.ai-latency-label{ font-size: 10px; color: #4b5563; margin-left: 4px; }
+.ai-expand-btn   { background: none; border: none; color: var(--text3); cursor: pointer; padding: 0; margin-left: auto; display: flex; align-items: center; }
+.ai-expand-btn:hover { color: var(--text2); }
+
+/* Progress bar */
+.ai-progress-wrap { height: 3px; background: rgba(255,255,255,0.06); border-radius: 99px; margin: 8px 0; overflow: hidden; }
+.ai-progress-bar  { height: 100%; background: linear-gradient(90deg, #7c3aed, #6366f1); border-radius: 99px; transition: width 0.4s ease; }
+
+/* Steps */
+.ai-steps { margin: 6px 0 4px; display: flex; flex-direction: column; gap: 3px; }
+.ai-step  { font-size: 10px; color: #4b5563; display: flex; align-items: center; gap: 6px; }
+.ai-step::before { content: ''; display: inline-block; width: 4px; height: 4px; border-radius: 50%; background: #6366f1; flex-shrink: 0; }
+
+/* Content */
 .ai-content {
   font-size: 14px;
   color: #d1d5db;
@@ -575,9 +591,32 @@ a:hover { color: var(--link-h); }
   border: 1px solid rgba(129,140,248,0.22);
   border-radius: var(--radius-sm);
   padding: 10px;
-  max-height: 280px;
-  overflow: auto;
+  overflow: hidden;
 }
+.ai-content.ai-content-collapsed {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Sources */
+.ai-sources { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ai-source-pill {
+  font-size: 10px; color: #6b7280;
+  border: 1px solid #1f2937; border-radius: 99px;
+  padding: 2px 8px; text-decoration: none;
+  white-space: nowrap; overflow: hidden; max-width: 200px; text-overflow: ellipsis;
+  transition: color 0.15s, border-color 0.15s;
+}
+.ai-source-pill:hover { color: #a78bfa; border-color: #4c1d95; }
+
+/* Footer */
+.ai-footer     { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.ai-retry-btn  { font-size: 12px; color: #a78bfa; background: none; border: none; cursor: pointer; padding: 0; }
+.ai-retry-btn:hover  { color: #c4b5fd; }
+.ai-toggle-btn { font-size: 11px; color: #4b5563; background: none; border: none; cursor: pointer; padding: 0; }
+.ai-toggle-btn:hover { color: #9ca3af; }
 .ai-meta { font-size: 11px; color: var(--text3); margin-top: 8px; }
 
 /* Profiler panel */

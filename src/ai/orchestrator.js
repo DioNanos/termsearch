@@ -45,8 +45,14 @@ export async function generateSummary({
   results = [],
   session = [],
   onToken = null,
+  onProgress = null,
+  onStep = null,
   docCache = null,
 }, aiConfig) {
+  const emit = (progress, step) => {
+    if (onProgress) onProgress(progress);
+    if (step && onStep) onStep(step);
+  };
   if (!aiConfig?.enabled || !aiConfig?.api_base || !aiConfig?.model) {
     return { error: 'ai_not_configured', message: 'AI not configured. Add endpoint in Settings.' };
   }
@@ -61,6 +67,7 @@ export async function generateSummary({
 
   try {
     // Phase 1: AI decides which URLs to fetch
+    emit(5, 'Analyzing query…');
     const phase1Prompt = buildFetchDecisionPrompt({
       query,
       results,
@@ -83,6 +90,15 @@ export async function generateSummary({
     const allResultUrls = results.slice(0, 10).map((r) => r.url).filter(Boolean);
     const { urls: urlsToFetch } = parseFetchDecision(phase1Result?.content, allResultUrls);
 
+    // Emit step per URL before batch fetch
+    emit(15, `Fetching ${urlsToFetch.length || allResultUrls.slice(0, 2).length} source(s)…`);
+    urlsToFetch.slice(0, 6).forEach((url) => {
+      try {
+        const host = new URL(url).hostname.replace(/^www\./, '');
+        if (onStep) onStep(`Reading: ${host}`);
+      } catch { if (onStep) onStep('Reading source…'); }
+    });
+
     // Fetch the selected URLs
     let documents = [];
     if (urlsToFetch.length > 0) {
@@ -99,6 +115,8 @@ export async function generateSummary({
       documents = fallback.filter((d) => d.status === 'ok' && d.content);
     }
 
+    emit(60, `Synthesizing from ${documents.length} page(s)…`);
+
     // Phase 2: synthesize summary
     const phase2Prompt = buildAgenticSummaryPrompt({ query, lang, results, documents, session });
 
@@ -107,6 +125,7 @@ export async function generateSummary({
 
     if (typeof onToken === 'function') {
       // Streaming mode
+      emit(65, 'Generating summary…');
       const streamResult = await stream(phase2Prompt, onToken, {
         ...ai,
         systemPrompt: 'You are a search assistant. Write your answer directly. Do not include reasoning or thinking.',
