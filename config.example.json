@@ -1,0 +1,31 @@
+{
+  "port": 3000,
+  "host": "127.0.0.1",
+  "search": {
+    "providers": ["duckduckgo", "wikipedia"]
+  },
+  "ai": {
+    "enabled": false,
+    "api_base": "http://localhost:11434/v1",
+    "api_key": "",
+    "model": "qwen3.5:4b",
+    "_providers": {
+      "localhost_ollama": { "api_base": "http://localhost:11434/v1",         "model": "qwen3.5:4b" },
+      "localhost_lmstudio": { "api_base": "http://localhost:1234/v1",        "model": "your-model" },
+      "chutes_tee":       { "api_base": "https://llm.chutes.ai/v1",         "model": "deepseek-ai/DeepSeek-V3.2-TEE" },
+      "openai":           { "api_base": "https://api.openai.com/v1",        "model": "gpt-4o-mini" }
+    }
+  },
+  "brave": {
+    "enabled": false,
+    "api_key": ""
+  },
+  "mojeek": {
+    "enabled": false,
+    "api_key": ""
+  },
+  "searxng": {
+    "enabled": false,
+    "url": ""
+  }
+}

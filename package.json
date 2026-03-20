@@ -1,0 +1,48 @@
+{
+  "name": "termsearch",
+  "version": "0.3.0",
+  "description": "Personal search engine for Termux/Linux/macOS — zero-config, privacy-first, AI-optional",
+  "type": "module",
+  "bin": {
+    "termsearch": "./bin/termsearch.js"
+  },
+  "main": "./src/server.js",
+  "files": [
+    "bin/",
+    "src/",
+    "scripts/",
+    "frontend/dist/",
+    "README.md",
+    "LICENSE",
+    "config.example.json"
+  ],
+  "scripts": {
+    "start": "node ./bin/termsearch.js",
+    "dev": "node --watch ./src/server.js",
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "search",
+    "metasearch",
+    "personal",
+    "terminal",
+    "termux",
+    "privacy",
+    "ai",
+    "duckduckgo",
+    "wikipedia",
+    "self-hosted"
+  ],
+  "author": "DAG",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DioNanos/termsearch"
+  }
+}
