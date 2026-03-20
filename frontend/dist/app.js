@@ -267,7 +267,6 @@ const AI_PRESETS = [
   { id: 'chutes',   label: 'Chutes.ai TEE',            api_base: 'https://llm.chutes.ai/v1',  keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
   { id: 'anthropic',label: 'Anthropic',                api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
   { id: 'openai',   label: 'OpenAI',                   api_base: 'https://api.openai.com/v1', keyRequired: true,  defaultModel: 'gpt-4o-mini' },
-  { id: 'openrouter', label: 'OpenRoute/OpenRouter',   api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
 ];
 
 const ENGINE_GROUPS = [
@@ -282,7 +281,7 @@ const ENGINE_GROUPS = [
 
 const ENGINE_PRESETS = [
   { id: 'all', label: 'All', engines: [] },
-  { id: 'balanced', label: 'Balanced', engines: ['duckduckgo', 'wikipedia', 'bing', 'startpage', 'github', 'reddit', 'youtube'] },
+  { id: 'balanced', label: 'Balanced', engines: ['duckduckgo', 'wikipedia', 'bing', 'brave', 'github', 'reddit', 'youtube'] },
   { id: 'github', label: 'GitHub Focus', engines: ['github-api', 'github', 'duckduckgo', 'wikipedia'] },
 ];
 
@@ -1054,12 +1053,12 @@ function renderApp() {
   const mobileBar = el('div', { className: 'mobile-bar' },
     el('div', { className: 'mobile-bar-search' }, SearchForm(state.query, (q, cat) => { state.query = q; doSearch(q, cat); })),
     mobileTabs,
-    el('div', { className: 'mobile-bar-engine' }, EnginePicker()),
     el('div', { className: 'mobile-bar-row' },
       el('div', {
         className: 'mobile-logo',
         onClick: () => { state.query = ''; state.category = 'web'; navigate('#/'); renderApp(); },
       }, 'Term', el('strong', {}, 'Search')),
+      EnginePicker(),
       LangPicker(),
       el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
       el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
@@ -1161,6 +1160,9 @@ async function renderSettings() {
   const brave  = cfg.brave  || {};
   const mojeek = cfg.mojeek || {};
   const searxng = cfg.searxng || {};
+  const yandexCfg = cfg.yandex || {};
+  const ahmiaCfg = cfg.ahmia || {};
+  const marginaliaCfg = cfg.marginalia || {};
   const detectedPreset = detectPresetFromBase(ai.api_base);
 
   const header = el('div', { className: 'header' },
@@ -1338,6 +1340,9 @@ async function renderSettings() {
       brave:  { enabled: isChecked('brave-enabled') },
       mojeek: { enabled: isChecked('mojeek-enabled') },
       searxng:{ url: val('searxng-url'),                       enabled: isChecked('searxng-enabled') },
+      yandex:     { enabled: isChecked('yandex-enabled') },
+      ahmia:      { enabled: isChecked('ahmia-enabled') },
+      marginalia: { enabled: isChecked('marginalia-enabled') },
     };
     if (aiKey) update.ai.api_key = aiKey;
     if (braveKey) update.brave.api_key = braveKey;
@@ -1470,7 +1475,7 @@ async function renderSettings() {
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI · OpenRoute/OpenRouter',
+          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI',
           el('br', {}),
           'You can also keep custom OpenAI-compatible endpoints.',
         ),
@@ -1563,7 +1568,7 @@ async function renderSettings() {
       ),
 
       // SearXNG
-      el('div', { style: 'padding:10px 0' },
+      el('div', { style: 'padding:10px 0;border-bottom:1px solid var(--border2)' },
         el('div', { className: 'toggle-row' },
           el('span', { className: 'toggle-label' }, 'SearXNG (self-hosted)'),
           el('label', { className: 'toggle' },
@@ -1576,6 +1581,33 @@ async function renderSettings() {
           el('button', { className: 'btn', onClick: () => testProvider('searxng') }, 'Test'),
         ),
         el('div', { id: 'provider-test-searxng', style: 'display:none' }),
+      ),
+
+      // Uncensored / Alternative
+      el('div', { style: 'padding:10px 0' },
+        el('div', { style: 'font-size:11px;color:var(--text2);margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase' }, 'Uncensored / Alternative'),
+        el('div', { className: 'toggle-row' },
+          el('span', { className: 'toggle-label' }, 'Yandex (HTML scraper, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'yandex-enabled', ...(yandexCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'toggle-row', style: 'margin-top:6px' },
+          el('span', { className: 'toggle-label' }, 'Ahmia (Tor index, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'ahmia-enabled', ...(ahmiaCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'toggle-row', style: 'margin-top:6px' },
+          el('span', { className: 'toggle-label' }, 'Marginalia (indie index, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'marginalia-enabled', ...(marginaliaCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'form-hint', style: 'margin-top:6px' }, 'Zero-config scraper engines. May be blocked by CAPTCHA under heavy use.'),
       ),
 
       el('div', { style: 'margin-top:12px;display:flex;align-items:center;gap:8px' },

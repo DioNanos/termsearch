@@ -209,7 +209,7 @@ async function cmdStart(flags) {
   }
 
   writeFileSync(paths.pid, String(child.pid));
-  ok(`Started  (PID ${child.pid})`);
+  ok(`TermSearch v${VERSION} started  (PID ${child.pid})`);
   info(`${BOLD}${getUrl()}${RESET}`);
   info(`Logs: ${paths.log}`);
 }
@@ -242,10 +242,11 @@ async function cmdRestart(flags) {
   await cmdStart(flags);
 }
 
-function cmdStatus() {
+async function cmdStatus() {
   const { running, pid } = getStatus();
   const paths = getPaths();
   console.log('');
+  console.log(`  ${BOLD}TermSearch v${VERSION}${RESET}`);
   if (running) {
     ok(`${BOLD}Running${RESET}  (PID ${pid})`);
     info(`${getUrl()}`);
@@ -255,6 +256,7 @@ function cmdStatus() {
     warn('Stopped');
     info(`Run ${BOLD}termsearch start${RESET} to start`);
   }
+  await printUpdateHint();
   console.log('');
 }
 
@@ -332,6 +334,9 @@ async function cmdDoctor() {
       } else { err(`HTTP: ${r.status} from /api/health`); allOk = false; }
     } catch (e) { err(`HTTP: cannot reach ${getUrl()} — ${e.message}`); allOk = false; }
   }
+
+  // npm update check
+  await printUpdateHint();
 
   console.log('');
   if (allOk) { ok(`${GREEN}All checks passed${RESET}`); }
@@ -426,6 +431,39 @@ ${BOLD}Data:${RESET}  ~/.termsearch/config.json   (edit via Settings in browser)
 ${BOLD}Logs:${RESET}  ~/.termsearch/termsearch.log
 ${BOLD}URL:${RESET}   http://localhost:3000
 `);
+}
+
+// ─── Update check ─────────────────────────────────────────────────────────
+
+async function checkNpmUpdate() {
+  try {
+    const ac = new AbortController();
+    setTimeout(() => ac.abort(), 4000);
+    const r = await fetch('https://registry.npmjs.org/termsearch/latest', { signal: ac.signal });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const latest = data.version;
+    if (!latest) return null;
+    if (latest === VERSION) return { upToDate: true, latest };
+    // Simple semver compare: split, compare numerically
+    const cur = VERSION.split('.').map(Number);
+    const lat = latest.split('.').map(Number);
+    const newer = lat[0] > cur[0] || (lat[0] === cur[0] && lat[1] > cur[1]) || (lat[0] === cur[0] && lat[1] === cur[1] && lat[2] > cur[2]);
+    return { upToDate: !newer, latest };
+  } catch {
+    return null;
+  }
+}
+
+async function printUpdateHint() {
+  const update = await checkNpmUpdate();
+  if (!update) return;
+  if (update.upToDate) {
+    ok(`Up to date (v${VERSION})`);
+  } else {
+    warn(`Update available: v${VERSION} → v${update.latest}`);
+    info(`Run ${BOLD}npm install -g termsearch${RESET} to update`);
+  }
 }
 
 // ─── Utilities ────────────────────────────────────────────────────────────

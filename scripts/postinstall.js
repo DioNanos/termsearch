@@ -17,9 +17,15 @@ function ok(msg)   { console.log(`  ${GREEN}✓${RESET} ${msg}`); }
 function warn(msg) { console.log(`  ${YELLOW}⚠${RESET} ${msg}`); }
 function info(msg) { console.log(`  ${CYAN}→${RESET} ${msg}`); }
 
+let VERSION = '0.0.0';
+try {
+  const pkgPath = new URL('../package.json', import.meta.url);
+  VERSION = JSON.parse(fs.readFileSync(pkgPath, 'utf8')).version || VERSION;
+} catch { /* ignore */ }
+
 try {
   console.log('');
-  console.log(`${BOLD}  TermSearch — post-install check${RESET}`);
+  console.log(`${BOLD}  TermSearch v${VERSION}${RESET} — post-install check`);
   console.log('');
 
   // ── Node.js version ──────────────────────────────────────────────────────
@@ -76,7 +82,7 @@ try {
   }
 
   console.log('');
-  info(`Run ${BOLD}termsearch${RESET}${CYAN} then open http://localhost:3000`);
+  info(`Run ${BOLD}termsearch${RESET}${CYAN} to start v${VERSION} → http://localhost:3000`);
   console.log('');
 
 } catch {
