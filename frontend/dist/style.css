@@ -937,16 +937,81 @@ a:hover { color: var(--link-h); }
 
 /* ─── Add to browser hint ─────────────────────────────────────────────────── */
 .add-browser-hint {
-  max-width: 380px;
-  margin: 16px auto 0;
-  padding: 12px 16px;
+  max-width: 420px;
+  margin: 20px auto 0;
+  padding: 16px 20px;
   border-radius: var(--radius);
-  background: rgba(30,27,75,0.35);
-  border: 1px solid rgba(109,40,217,0.25);
-  color: var(--text3);
-  font-size: 11px;
-  line-height: 1.6;
+  background: rgba(30,27,75,0.45);
+  border: 1px solid rgba(109,40,217,0.35);
+  color: var(--text2);
+  font-size: 12px;
+  line-height: 1.7;
   animation: fadeIn 0.2s ease;
+}
+.add-browser-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 10px;
+}
+.add-browser-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+.add-browser-badge {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 99px;
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(167,139,250,0.18);
+  color: #a78bfa;
+  border: 1px solid rgba(167,139,250,0.3);
+  letter-spacing: 0.02em;
+}
+.add-browser-label {
+  font-size: 10px;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.add-browser-url {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(167,139,250,0.25);
+}
+.add-browser-url code {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: #c4b5fd;
+  word-break: break-all;
+  user-select: all;
+}
+.add-browser-copy {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(167,139,250,0.35);
+  background: rgba(109,40,217,0.25);
+  color: #e0d4fd;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.add-browser-copy:hover {
+  background: rgba(109,40,217,0.45);
+  border-color: rgba(167,139,250,0.55);
 }
 
 /* ─── Footer ──────────────────────────────────────────────────────────────── */

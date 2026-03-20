@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
-  <ShortName>TermSearch</ShortName>
-  <Description>TermSearch — personal search engine</Description>
-  <InputEncoding>UTF-8</InputEncoding>
-  <Image height="64" width="64" type="image/svg+xml">/icon.svg</Image>
-  <Url type="text/html" method="get" template="http://localhost:3000/#/?q={searchTerms}"/>
-</OpenSearchDescription>

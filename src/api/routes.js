@@ -231,6 +231,23 @@ export function createRouter(config, rateLimiters) {
     });
   });
 
+  // ─── OpenSearch (dynamic — adapts to host/port) ─────────────────────────
+  router.get('/opensearch.xml', (req, res) => {
+    const proto = req.protocol;
+    const host = req.get('host') || `${req.hostname}:${req.socket.localPort}`;
+    const origin = `${proto}://${host}`;
+    res.setHeader('Content-Type', 'application/opensearchdescription+xml; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
+  <ShortName>TermSearch</ShortName>
+  <Description>TermSearch — personal search engine</Description>
+  <InputEncoding>UTF-8</InputEncoding>
+  <Image height="64" width="64" type="image/svg+xml">${origin}/icon.svg</Image>
+  <Url type="text/html" method="get" template="${origin}/#/?q={searchTerms}"/>
+</OpenSearchDescription>`);
+  });
+
   // ─── OpenAPI ─────────────────────────────────────────────────────────────
   router.get('/api/openapi.json', (_req, res) => {
     applySecurityHeaders(res);

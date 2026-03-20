@@ -1148,20 +1148,25 @@ function addToBrowser() {
   // Show inline hint
   const existing = document.querySelector('.add-browser-hint');
   if (existing) { existing.remove(); return; }
+  const searchUrl = `${location.origin}/#/?q=%s`;
+  const urlBox = el('div', { className: 'add-browser-url' });
+  const urlText = el('code', {}, searchUrl);
+  const copyBtn = el('button', { className: 'add-browser-copy', type: 'button', onClick: () => {
+    navigator.clipboard.writeText(searchUrl).then(() => { copyBtn.textContent = 'Copied!'; setTimeout(() => { copyBtn.textContent = 'Copy'; }, 2000); }).catch(() => {});
+  } }, 'Copy');
+  urlBox.append(urlText, copyBtn);
   const hint = el('div', { className: 'add-browser-hint' },
-    el('strong', {}, 'Add TermSearch to your browser:'),
-    el('div', { style: 'margin-top:6px' },
-      el('span', { style: 'color:var(--text2)' }, 'Firefox'), ' — click the address bar, look for "Add TermSearch"',
+    el('div', { className: 'add-browser-title' }, 'Add TermSearch to your browser'),
+    el('div', { className: 'add-browser-steps' },
+      el('div', {}, el('span', { className: 'add-browser-badge' }, 'Firefox'), ' Address bar → click TermSearch icon → "Add"'),
+      el('div', {}, el('span', { className: 'add-browser-badge' }, 'Chrome'), ' Settings → Search engine → Manage → Add'),
+      el('div', {}, el('span', { className: 'add-browser-badge' }, 'Safari'), ' Not natively supported — use extension or bookmark'),
     ),
-    el('div', { style: 'margin-top:3px' },
-      el('span', { style: 'color:var(--text2)' }, 'Chrome'), ' — Settings → Search engine → Manage → Add',
-    ),
-    el('div', { style: 'margin-top:3px;font-family:var(--font-mono);font-size:10px;color:var(--text3);word-break:break-all' },
-      `URL: ${location.origin}/#/?q=%s`,
-    ),
+    el('div', { className: 'add-browser-label' }, 'Search URL (paste in browser settings):'),
+    urlBox,
   );
   document.querySelector('.home-actions')?.after(hint);
-  setTimeout(() => hint.remove(), 12000);
+  setTimeout(() => hint.remove(), 20000);
 }
 
 function renderHome(app) {
