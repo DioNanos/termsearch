@@ -1,6 +1,6 @@
 {
   "name": "termsearch",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Personal search engine for Termux/Linux/macOS — zero-config, privacy-first, AI-optional",
   "type": "module",
   "bin": {

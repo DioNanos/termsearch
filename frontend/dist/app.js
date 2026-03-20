@@ -15,6 +15,7 @@ const state = {
   aiExpanded: false,
   aiStartTime: null,
   aiLatencyMs: null,
+  aiSession: [],     // { q, r }[] — ultimi 4 summary (passati all'AI come contesto)
   aiLastQuery: null,
   aiLastResults: null,
   aiLastLang: null,
@@ -43,6 +44,47 @@ const state = {
     }
   })(),
 };
+
+let mobileBarCleanup = null;
+
+function clearMobileBarLayout() {
+  if (typeof mobileBarCleanup === 'function') {
+    mobileBarCleanup();
+  }
+  mobileBarCleanup = null;
+  document.documentElement.style.setProperty('--mobile-bar-height', '0px');
+}
+
+function bindMobileBarLayout(mobileBar) {
+  clearMobileBarLayout();
+  if (!mobileBar) return;
+
+  const media = window.matchMedia('(max-width: 640px)');
+  const root = document.documentElement;
+  const update = () => {
+    if (!media.matches || !mobileBar.isConnected) {
+      root.style.setProperty('--mobile-bar-height', '0px');
+      return;
+    }
+    const h = Math.ceil(mobileBar.getBoundingClientRect().height);
+    root.style.setProperty('--mobile-bar-height', `${h}px`);
+  };
+
+  const onResize = () => update();
+  window.addEventListener('resize', onResize);
+
+  let observer = null;
+  if (typeof ResizeObserver !== 'undefined') {
+    observer = new ResizeObserver(update);
+    observer.observe(mobileBar);
+  }
+
+  requestAnimationFrame(update);
+  mobileBarCleanup = () => {
+    window.removeEventListener('resize', onResize);
+    if (observer) observer.disconnect();
+  };
+}
 
 function buildSearchHash(query, category = 'web') {
   const params = new URLSearchParams();
@@ -443,32 +485,41 @@ function renderAiPanel() {
   const isDone    = state.aiStatus === 'done';
   const isError   = state.aiStatus === 'error';
   const dotsClass = isDone ? 'done' : isError ? 'error' : '';
-  const statusText = state.aiStatus === 'loading' ? 'Thinking…'
-    : state.aiStatus === 'streaming' ? 'Generating…'
-    : isDone ? 'AI Summary' : 'Error';
 
-  // Dots
+  // Row 1: dots + "AI" (always) + model + latency
   const dotsEl = el('div', { className: 'ai-dots' });
   ['violet', 'indigo', 'dim'].forEach(c => {
     dotsEl.append(el('div', { className: `ai-dot ${dotsClass || c}` }));
   });
-
-  // Latency
   const latMs = state.aiLatencyMs;
   const latLabel = latMs != null ? (latMs < 1000 ? `${latMs}ms` : `${(latMs / 1000).toFixed(1)}s`) : null;
-
-  // Header
-  const headerLeft = el('div', { className: 'panel-header-left' },
+  const row1 = el('div', { className: 'panel-header-left' },
     dotsEl,
-    el('span', { className: 'panel-label' }, statusText),
+    el('span', { className: 'panel-label' }, 'AI'),
     state.aiMeta?.model ? el('span', { className: 'ai-model-label' }, state.aiMeta.model) : null,
     latLabel ? el('span', { className: 'ai-latency-label' }, `· ${latLabel}`) : null,
   );
+
+  // Row 2: status text (violet) + step/fetch meta
+  const statusText = isError ? 'Error'
+    : isDone ? 'Done'
+    : state.aiStatus === 'loading' ? 'Thinking…' : 'Generating…';
+  const statusColor = isError ? '#f87171' : isDone ? '#a78bfa' : '#a78bfa';
+  const lastStep = state.aiSteps.length > 0 ? state.aiSteps[state.aiSteps.length - 1] : null;
+  const metaText = isDone && state.aiMeta?.fetchedCount ? `· ${state.aiMeta.fetchedCount} pages read`
+    : isLoading && lastStep ? `· ${lastStep}` : '';
+  const row2 = el('div', { className: 'ai-status-row' },
+    el('span', { className: 'ai-status-text', style: `color:${statusColor}` }, statusText),
+    metaText ? el('span', { className: 'ai-status-meta' }, metaText) : null,
+  );
+
   const chevronPath = state.aiExpanded ? '<polyline points="18 15 12 9 6 15"/>' : '<polyline points="6 9 12 15 18 9"/>';
   const expandBtn = el('button', { className: 'ai-expand-btn', type: 'button', title: state.aiExpanded ? 'Collapse' : 'Expand' });
   expandBtn.innerHTML = svg(chevronPath, 14);
   expandBtn.onclick = () => { state.aiExpanded = !state.aiExpanded; renderAiPanel(); };
-  const header = el('div', { className: 'panel-header' }, headerLeft, expandBtn);
+
+  const headerInner = el('div', { className: 'ai-header-inner' }, row1, row2);
+  const header = el('div', { className: 'panel-header' }, headerInner, expandBtn);
 
   // Progress bar
   const showProgress = isLoading && state.aiProgress > 0;
@@ -509,6 +560,19 @@ function renderAiPanel() {
     }),
   ) : null;
 
+  // Session memory (shown when expanded + more than 1 entry, all except current)
+  const prevSession = state.aiSession.slice(0, -1);
+  const sessionEl = (state.aiExpanded && prevSession.length > 0) ? el('div', { className: 'ai-session' },
+    el('p', { className: 'ai-session-label' }, 'Session'),
+    ...prevSession.map((item, i) =>
+      el('div', { className: 'ai-session-item' },
+        el('span', { className: 'ai-session-num' }, `${i + 1}.`),
+        el('span', { className: 'ai-session-q' }, item.q),
+        el('span', { className: 'ai-session-r' }, `→ ${item.r}`),
+      )
+    ),
+  ) : null;
+
   // Footer: retry + expand/collapse
   const retryBtn = el('button', { className: 'ai-retry-btn', type: 'button' }, 'Retry');
   retryBtn.onclick = () => {
@@ -526,6 +590,7 @@ function renderAiPanel() {
   if (stepsEl)    panel.append(stepsEl);
   panel.append(contentEl);
   if (sourcesEl)  panel.append(sourcesEl);
+  if (sessionEl)  panel.append(sessionEl);
   panel.append(footer);
 
   if (state.aiStatus === 'streaming' && state.aiSummary.length < 60) {
@@ -887,7 +952,7 @@ async function startAiSummary(query, results, lang) {
     const r = await fetch('/api/ai-summary', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, lang, results: results.slice(0, 10), stream: true }),
+      body: JSON.stringify({ query, lang, results: results.slice(0, 10), stream: true, session: state.aiSession }),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
@@ -917,6 +982,12 @@ async function startAiSummary(query, results, lang) {
             state.aiSources = Array.isArray(d.sites) ? d.sites.map(sanitizeHttpUrl).filter(Boolean) : [];
             state.aiMeta = { fetchedCount: d.fetchedCount, model: d.model };
             state.aiLatencyMs = Date.now() - state.aiStartTime;
+            // Save to session memory (max 4 entries, skip if already saved for this query)
+            const lastEntry = state.aiSession[state.aiSession.length - 1];
+            if (state.aiSummary && (!lastEntry || lastEntry.q !== query)) {
+              const r = state.aiSummary.split(/[.!?\n]/)[0].slice(0, 100);
+              state.aiSession = [...state.aiSession.slice(-3), { q: query, r }];
+            }
             renderAiPanel();
           }
         } catch { /* ignore */ }
@@ -937,12 +1008,13 @@ function renderApp() {
   app.innerHTML = '';
 
   if (!state.query) {
+    clearMobileBarLayout();
     renderHome(app);
     return;
   }
 
   // Results page
-  const header = el('div', { className: 'header' },
+  const header = el('div', { className: 'header hide-mobile' },
     el('div', { className: 'logo-text', onClick: () => { state.query = ''; state.category = 'web'; navigate('#/'); renderApp(); } },
       'Term', el('strong', {}, 'Search'),
     ),
@@ -953,25 +1025,46 @@ function renderApp() {
       el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
     ),
   );
-  const categoryBar = el('div', { className: 'category-tabs' });
+
+  const categoryBar = el('div', { className: 'category-tabs hide-mobile' });
   const categories = [
     { id: 'web', label: 'Web' },
     { id: 'images', label: 'Images' },
     { id: 'news', label: 'News' },
   ];
-  categories.forEach((cat) => {
-    categoryBar.append(el('button', {
-      className: `cat-tab ${state.category === cat.id ? 'active' : ''}`,
-      onClick: () => {
-        if (state.category === cat.id) return;
-        state.category = cat.id;
-        navigate(buildSearchHash(state.query, state.category));
-        if (state.query) doSearch(state.query, state.category);
-      },
-      type: 'button',
-    }, cat.label));
-  });
+  const buildCatTabs = (container) => {
+    categories.forEach((cat) => {
+      container.append(el('button', {
+        className: `cat-tab ${state.category === cat.id ? 'active' : ''}`,
+        onClick: () => {
+          if (state.category === cat.id) return;
+          state.category = cat.id;
+          navigate(buildSearchHash(state.query, state.category));
+          if (state.query) doSearch(state.query, state.category);
+        },
+        type: 'button',
+      }, cat.label));
+    });
+  };
+  buildCatTabs(categoryBar);
   categoryBar.append(EnginePicker());
+
+  const mobileTabs = el('div', { className: 'mobile-bar-tabs' });
+  buildCatTabs(mobileTabs);
+  const mobileBar = el('div', { className: 'mobile-bar' },
+    el('div', { className: 'mobile-bar-search' }, SearchForm(state.query, (q, cat) => { state.query = q; doSearch(q, cat); })),
+    mobileTabs,
+    el('div', { className: 'mobile-bar-engine' }, EnginePicker()),
+    el('div', { className: 'mobile-bar-row' },
+      el('div', {
+        className: 'mobile-logo',
+        onClick: () => { state.query = ''; state.category = 'web'; navigate('#/'); renderApp(); },
+      }, 'Term', el('strong', {}, 'Search')),
+      LangPicker(),
+      el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
+      el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
+    ),
+  );
 
   const main = el('div', { className: 'main' });
 
@@ -1016,7 +1109,8 @@ function renderApp() {
     if (socPanel) main.append(socPanel);
   }
 
-  app.append(header, categoryBar, main);
+  app.append(header, categoryBar, main, mobileBar);
+  bindMobileBarLayout(mobileBar);
   renderAiPanel();
 }
 
@@ -1051,6 +1145,7 @@ async function renderSettings() {
   const app = document.getElementById('app');
   if (!app) return;
   app.innerHTML = '';
+  clearMobileBarLayout();
 
   let cfg = state.config;
   if (!cfg) {
