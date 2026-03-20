@@ -286,6 +286,27 @@ const ENGINE_PRESETS = [
   { id: 'github', label: 'GitHub Focus', engines: ['github-api', 'github', 'duckduckgo', 'wikipedia'] },
 ];
 
+// ─── Engine availability (requires config) ────────────────────────────────
+const SEARXNG_ROUTED = new Set([
+  'bing', 'google', 'yahoo', 'startpage', 'qwant',
+  'youtube', 'reddit', 'hackernews', 'sepiasearch',
+  'wikidata', 'crossref', 'openalex', 'openlibrary',
+  'mastodon users', 'mastodon hashtags', 'tootfinder',
+  'lemmy communities', 'lemmy posts',
+  'piratebay', '1337x', 'nyaa',
+]);
+
+function isEngineAvailable(engine) {
+  const cfg = state.config || {};
+  if (engine === 'brave')      return Boolean(cfg.brave?.enabled && cfg.brave?.api_key);
+  if (engine === 'mojeek')     return Boolean(cfg.mojeek?.enabled && cfg.mojeek?.api_key);
+  if (engine === 'yandex')     return cfg.yandex?.enabled !== false;
+  if (engine === 'ahmia')      return cfg.ahmia?.enabled !== false;
+  if (engine === 'marginalia') return cfg.marginalia?.enabled !== false;
+  if (SEARXNG_ROUTED.has(engine)) return Boolean(cfg.searxng?.enabled && cfg.searxng?.url);
+  return true; // duckduckgo, wikipedia, github, github-api — sempre disponibili
+}
+
 function detectPresetFromBase(base) {
   const raw = String(base || '').toLowerCase();
   if (!raw) return 'custom';
@@ -316,8 +337,11 @@ function LangPicker() {
 
 function EnginePicker(opts = {}) {
   const compact = Boolean(opts.compact);
+  // [] = ALL (no filter sent to backend)
+  const isAll = state.selectedEngines.length === 0;
+  const selectedCount = isAll ? 0 : state.selectedEngines.length;
+
   const details = el('details', { className: `engine-picker${compact ? ' engine-picker-compact' : ''}` });
-  const selectedCount = state.selectedEngines.length;
   const summary = compact
     ? el('summary', { className: 'engine-picker-summary engine-picker-summary-icon', title: 'Search engines' },
       iconEl('filter', 'engine-filter-icon'),
@@ -329,45 +353,64 @@ function EnginePicker(opts = {}) {
     );
 
   const body = el('div', { className: 'engine-picker-body' });
+
+  // Preset buttons
   const presetRow = el('div', { className: 'engine-preset-row' });
   ENGINE_PRESETS.forEach((preset) => {
+    const isActive = preset.id === 'all' ? isAll
+      : preset.engines.length > 0 && preset.engines.every(e => state.selectedEngines.includes(e)) && state.selectedEngines.length === preset.engines.length;
     presetRow.append(el('button', {
-      className: `btn ${preset.id === 'balanced' ? 'btn-primary' : ''}`,
+      className: `btn ${isActive || preset.id === 'balanced' ? 'btn-primary' : ''}`,
       type: 'button',
       onClick: () => {
-        setSelectedEngines(preset.engines);
-        details.open = false;
-        if (state.query) doSearch(state.query, state.category);
-        else renderApp();
+        // 'all' preset → clear filter (backend uses all configured providers)
+        setSelectedEngines(preset.id === 'all' ? [] : preset.engines);
+        // visually check/uncheck all available chips
+        [...details.querySelectorAll('.engine-chip input:not(:disabled)')].forEach((input) => {
+          input.checked = preset.id === 'all' || preset.engines.includes(input.closest('.engine-chip')?.querySelector('span')?.textContent?.trim().toLowerCase() || '');
+        });
       },
     }, preset.label));
   });
   body.append(presetRow);
 
+  // Engine chips per group
   ENGINE_GROUPS.forEach((group) => {
     const card = el('div', { className: 'engine-group' });
     card.append(el('div', { className: 'engine-group-title' }, group.label));
     const list = el('div', { className: 'engine-chip-wrap' });
     group.items.forEach((engine) => {
-      const checked = state.selectedEngines.includes(engine);
+      const available = isEngineAvailable(engine);
+      // checked = explicitly selected, OR in "all" mode ([] = all available)
+      const checked = available && (isAll || state.selectedEngines.includes(engine));
       const id = `engine-${engine.replace(/[^a-z0-9]+/g, '-')}-${Math.random().toString(36).slice(2, 6)}`;
-      const input = el('input', { id, type: 'checkbox', ...(checked ? { checked: '' } : {}) });
-      const label = el('label', { className: 'engine-chip', for: id }, input, el('span', {}, engine));
+      const inputAttrs = { id, type: 'checkbox', ...(checked ? { checked: '' } : {}), ...(available ? {} : { disabled: '' }) };
+      const input = el('input', inputAttrs);
+      const chipClass = `engine-chip${available ? '' : ' engine-chip-unavailable'}`;
+      const title = available ? engine : `${engine} — not configured (Settings)`;
+      const label = el('label', { className: chipClass, for: id, title },
+        input,
+        el('span', {}, engine),
+      );
       list.append(label);
     });
     card.append(list);
     body.append(card);
   });
 
+  // Apply / Reset
   body.append(el('div', { className: 'engine-actions' },
     el('button', {
       className: 'btn btn-primary',
       type: 'button',
       onClick: () => {
-        const selected = [...details.querySelectorAll('.engine-chip input:checked')]
-          .map((node) => node.parentElement?.textContent?.trim().toLowerCase())
+        const checked = [...details.querySelectorAll('.engine-chip input:not(:disabled):checked')]
+          .map((node) => node.closest('.engine-chip')?.querySelector('span')?.textContent?.trim().toLowerCase())
           .filter(Boolean);
-        setSelectedEngines(selected);
+        const availableAll = ENGINE_GROUPS.flatMap(g => g.items).filter(isEngineAvailable);
+        // If all available engines are checked, send [] (no filter)
+        const allChecked = availableAll.every(e => checked.includes(e));
+        setSelectedEngines(allChecked ? [] : checked);
         details.open = false;
         if (state.query) doSearch(state.query, state.category);
         else renderApp();
@@ -396,7 +439,6 @@ function EnginePicker(opts = {}) {
         document.removeEventListener('click', onClickOutside, true);
       }
     };
-    // Defer to avoid catching the same click that opened it
     requestAnimationFrame(() => document.addEventListener('click', onClickOutside, true));
   });
 
@@ -1165,11 +1207,34 @@ function addToBrowser() {
     el('div', { className: 'add-browser-label' }, 'Search URL (paste in browser settings):'),
     urlBox,
   );
-  document.querySelector('.home-actions')?.after(hint);
+  document.querySelector('.footer')?.after(hint);
   setTimeout(() => hint.remove(), 20000);
 }
 
 function renderHome(app) {
+  // Top-right controls
+  const topBar = el('div', { className: 'home-topbar' },
+    LangPicker(),
+    el('button', { className: 'btn-icon', title: 'Settings', onClick: () => navigate('#/settings') }, iconEl('settings')),
+    el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
+  );
+
+  // History below search (if present)
+  const historyEl = (state.historyEnabled && state.searchHistory.length > 0)
+    ? el('div', { className: 'home-history' },
+        ...state.searchHistory.slice(0, 8).map((q) =>
+          el('button', {
+            className: 'home-history-item',
+            type: 'button',
+            onClick: () => { state.query = q; state.category = 'web'; doSearch(q, 'web'); },
+          },
+          el('span', { className: 'home-history-icon', html: ICONS.search }),
+          el('span', {}, q),
+          ),
+        ),
+      )
+    : null;
+
   const home = el('div', { className: 'home' },
     el('div', { className: 'home-logo' }, 'Term', el('strong', {}, 'Search')),
     el('div', { className: 'home-tagline' },
@@ -1177,23 +1242,20 @@ function renderHome(app) {
       el('span', { className: 'tagline-mobile' }, 'Private local search'),
     ),
     el('div', { className: 'home-search' }, SearchForm('', (q) => { state.query = q; state.category = 'web'; doSearch(q, 'web'); })),
-    el('div', { className: 'home-actions' },
-      LangPicker(),
-      el('button', { className: 'btn', onClick: () => navigate('#/settings') }, iconEl('settings'), ' Settings'),
-      el('button', { className: 'btn', onClick: toggleTheme }, iconEl('theme'), ' Theme'),
-      el('button', { className: 'btn', onClick: addToBrowser, title: 'Add as browser search engine' }, iconEl('search'), ' Add to browser'),
-      el('a', { className: 'btn', href: 'https://github.com/DioNanos/termsearch', target: '_blank', rel: 'noopener noreferrer' }, iconEl('github'), ' GitHub'),
-    ),
+    historyEl,
   );
 
   const footer = el('div', { className: 'footer' },
     el('span', { className: 'footer-link' }, '© 2026 DioNanos'),
-    el('a', { className: 'footer-link', href: 'https://github.com/DioNanos/termsearch', target: '_blank', rel: 'noopener' },
-      iconEl('github'), 'GitHub',
+    el('a', { className: 'footer-link', href: 'https://github.com/DioNanos/termsearch', target: '_blank', rel: 'noopener noreferrer' },
+      iconEl('github'), ' GitHub',
+    ),
+    el('button', { className: 'footer-link footer-add-btn', onClick: addToBrowser, title: 'Add as default search engine' },
+      iconEl('search'), ' Add to browser',
     ),
   );
 
-  app.append(home, footer);
+  app.append(topBar, home, footer);
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────
