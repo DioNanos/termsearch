@@ -161,7 +161,6 @@ a:hover { color: var(--link-h); }
 }
 
 .engine-picker {
-  margin-left: auto;
   position: relative;
 }
 .engine-picker summary {
@@ -181,6 +180,43 @@ a:hover { color: var(--link-h); }
   color: var(--text2);
   font-size: 11px;
   cursor: pointer;
+}
+.engine-picker-summary-icon {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  justify-content: center;
+  background: transparent;
+  color: var(--text3);
+  border-color: var(--border);
+  position: relative;
+}
+.engine-picker-summary-icon:hover {
+  border-color: #3a3a3a;
+  color: var(--text2);
+}
+.engine-filter-icon {
+  display: inline-flex;
+  align-items: center;
+}
+.engine-picker-count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  padding: 0 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(109,40,217,0.95);
+  color: #fff;
+  border: 1px solid rgba(167,139,250,0.55);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
 }
 .engine-picker-title {
   white-space: nowrap;
@@ -962,7 +998,6 @@ a:hover { color: var(--link-h); }
   scrollbar-width: none;
 }
 .mobile-bar-tabs::-webkit-scrollbar { display: none; }
-.mobile-bar-engine { padding: 0 12px 4px; }
 .mobile-bar-row    {
   display: flex;
   align-items: center;
@@ -978,9 +1013,17 @@ a:hover { color: var(--link-h); }
   .main { padding-bottom: calc(20px + var(--mobile-bar-height, 0px) + env(safe-area-inset-bottom, 0px)); }
 
   .cat-tab { font-size: 10px; padding: 4px 8px; }
-  .mobile-bar-engine .engine-picker { width: 100%; margin-left: 0; }
-  .mobile-bar-engine .engine-picker-summary { width: 100%; justify-content: space-between; }
-  .engine-picker-body { width: calc(100vw - 24px); right: -6px; bottom: calc(100% + 8px); top: auto; }
+  .mobile-bar-row .engine-picker-summary-icon { width: 30px; height: 30px; }
+  .engine-picker-body {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    width: auto;
+    max-height: min(62vh, 520px);
+    bottom: calc(var(--mobile-bar-height, 0px) + env(safe-area-inset-bottom, 0px) + 10px);
+    top: auto;
+    z-index: 260;
+  }
   .logo-text { font-size: 15px; }
   .home-logo { font-size: 40px; }
   .home-tagline { letter-spacing: 0.08em; margin-bottom: 20px; }
