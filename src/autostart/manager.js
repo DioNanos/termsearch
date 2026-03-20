@@ -50,7 +50,7 @@ function termuxStatus() {
 function termuxEnable() {
   fs.mkdirSync(TERMUX_BOOT_DIR, { recursive: true });
   const bin = findBin();
-  const sh = `#!/data/data/com.termux/files/usr/bin/sh\n# TermSearch autostart\n${bin} &\n`;
+  const sh = `#!/data/data/com.termux/files/usr/bin/sh\n# TermSearch autostart\n${bin} start --fg &\n`;
   fs.writeFileSync(TERMUX_BOOT_FILE, sh, { mode: 0o755 });
 }
 
@@ -103,7 +103,7 @@ function linuxEnable() {
     '',
     '[Service]',
     'Type=simple',
-    `ExecStart=${bin}`,
+    `ExecStart=${bin} start --fg`,
     'Restart=on-failure',
     'RestartSec=5',
     '',
@@ -156,6 +156,8 @@ function macosEnable() {
   <key>ProgramArguments</key>
   <array>
     <string>${bin}</string>
+    <string>start</string>
+    <string>--fg</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
