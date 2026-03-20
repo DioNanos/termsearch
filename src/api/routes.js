@@ -11,7 +11,7 @@ import { detectProfileTarget, scanProfile, PROFILER_PLATFORMS } from '../profile
 import { fetchBlueskyPosts, fetchBlueskyActors, fetchGdeltArticles } from '../social/search.js';
 import { scrapeTPB, scrape1337x, extractMagnetFromUrl } from '../torrent/scrapers.js';
 
-const APP_VERSION = '0.3.0';
+const APP_VERSION = '0.3.1';
 const ALLOWED_CATEGORIES = new Set(['web', 'images', 'news']);
 
 function parseCategory(raw) {
@@ -29,6 +29,96 @@ function parseEngines(raw) {
       .filter(Boolean)
       .slice(0, 12)
   )];
+}
+
+function normalizeBase(rawBase) {
+  const raw = String(rawBase || '').trim();
+  if (!raw) return '';
+  return raw.replace(/\/$/, '');
+}
+
+function detectModelProvider(base, preset = '') {
+  const p = String(preset || '').trim().toLowerCase();
+  if (p && p !== 'custom') return p;
+  const b = String(base || '').toLowerCase();
+  if (b.includes('anthropic.com')) return 'anthropic';
+  if (b.includes('openrouter.ai')) return 'openrouter';
+  if (b.includes('openai.com')) return 'openai';
+  if (b.includes('chutes.ai')) return 'chutes';
+  if (b.includes(':11434')) return 'ollama';
+  if (b.includes(':1234')) return 'lmstudio';
+  if (b.includes(':8080')) return 'llamacpp';
+  return 'openai_compat';
+}
+
+async function fetchOpenAiCompatibleModels(base, apiKey, timeoutMs = 10000) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const headers = { Accept: 'application/json' };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const response = await fetch(`${base}/models`, { headers, signal: ac.signal });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return (payload?.data || [])
+      .map((item) => String(item?.id || '').trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchAnthropicModels(base, apiKey, timeoutMs = 10000) {
+  if (!apiKey) return [];
+  const endpoint = base.endsWith('/v1') ? `${base}/models` : `${base}/v1/models`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const response = await fetch(endpoint, {
+      headers: {
+        Accept: 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      signal: ac.signal,
+    });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return (payload?.data || [])
+      .map((item) => String(item?.id || '').trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchOllamaModels(base, timeoutMs = 10000) {
+  const origin = (() => {
+    try {
+      const u = new URL(base);
+      return `${u.protocol}//${u.host}`;
+    } catch {
+      return base;
+    }
+  })();
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${origin}/api/tags`, { headers: { Accept: 'application/json' }, signal: ac.signal });
+    if (!response.ok) return [];
+    const payload = await response.json();
+    return (payload?.models || [])
+      .map((item) => String(item?.name || '').trim())
+      .filter(Boolean);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function createRouter(config, rateLimiters) {
@@ -68,6 +158,7 @@ export function createRouter(config, rateLimiters) {
         '/api/magnet': { post: { summary: 'Extract magnet from page URL' } },
         '/api/scan': { post: { summary: 'Scan site pages by query' } },
         '/api/config': { get: { summary: 'Read config (masked)' }, post: { summary: 'Update config' } },
+        '/api/config/models': { post: { summary: 'List AI models from selected provider endpoint' } },
       },
     });
   });
@@ -303,6 +394,36 @@ export function createRouter(config, rateLimiters) {
 
   router.get('/api/config/test-ai', (_req, res) => {
     sendJson(res, 405, { error: 'method_not_allowed', message: 'Use POST /api/config/test-ai' });
+  });
+
+  // ─── Fetch provider model list ───────────────────────────────────────────
+  router.post('/api/config/models', express.json({ limit: '8kb' }), async (req, res) => {
+    const ip = req.clientIp;
+    if (!rateLimiters.checkGeneral(ip)) {
+      return sendRateLimited(res, { windowMs: rateLimiters.windowMs });
+    }
+    const cfg = config.getConfig();
+    const base = normalizeBase(req.body?.api_base || cfg.ai?.api_base || '');
+    const apiKey = String(req.body?.api_key || cfg.ai?.api_key || '');
+    const preset = String(req.body?.preset || '').trim().toLowerCase();
+    if (!base) return sendJson(res, 400, { ok: false, error: 'missing_api_base' });
+
+    const provider = detectModelProvider(base, preset);
+    let models = [];
+    if (provider === 'anthropic') {
+      models = await fetchAnthropicModels(base, apiKey);
+    } else if (provider === 'ollama') {
+      models = await fetchOllamaModels(base);
+      if (models.length === 0) {
+        models = await fetchOpenAiCompatibleModels(base, apiKey);
+      }
+    } else {
+      models = await fetchOpenAiCompatibleModels(base, apiKey);
+    }
+
+    models = [...new Set(models)].slice(0, 80);
+    applySecurityHeaders(res);
+    res.json({ ok: true, provider, models });
   });
 
   // ─── Test search provider ─────────────────────────────────────────────────

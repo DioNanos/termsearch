@@ -16,6 +16,15 @@ const state = {
   loading: false,
   providers: [],
   config: null,
+  historyEnabled: localStorage.getItem('ts-save-history') !== '0',
+  searchHistory: (() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem('ts-history') || '[]');
+      return Array.isArray(raw) ? raw.slice(0, 50).filter((q) => typeof q === 'string' && q.trim()) : [];
+    } catch {
+      return [];
+    }
+  })(),
 };
 
 function buildSearchHash(query, category = 'web') {
@@ -63,6 +72,27 @@ function getTheme() { return localStorage.getItem('ts-theme') || 'dark'; }
 function toggleTheme() {
   const isLight = document.documentElement.classList.toggle('light');
   localStorage.setItem('ts-theme', isLight ? 'light' : 'dark');
+}
+
+function setHistoryEnabled(enabled) {
+  state.historyEnabled = Boolean(enabled);
+  localStorage.setItem('ts-save-history', state.historyEnabled ? '1' : '0');
+  if (!state.historyEnabled) {
+    state.searchHistory = [];
+    localStorage.removeItem('ts-history');
+  }
+}
+
+function persistHistory() {
+  if (!state.historyEnabled) return;
+  localStorage.setItem('ts-history', JSON.stringify(state.searchHistory.slice(0, 50)));
+}
+
+function addSearchToHistory(query) {
+  const q = String(query || '').trim();
+  if (!q || !state.historyEnabled) return;
+  state.searchHistory = [q, ...state.searchHistory.filter((item) => item !== q)].slice(0, 50);
+  persistHistory();
 }
 
 // ─── SVG Icons ────────────────────────────────────────────────────────────
@@ -124,6 +154,23 @@ const LANGS = [
   { code: 'ja-JP', label: '🇯🇵 JA' },
 ];
 
+const AI_PRESETS = [
+  { id: 'openai', label: 'OpenAI', api_base: 'https://api.openai.com/v1', keyRequired: true, defaultModel: 'gpt-4o-mini' },
+  { id: 'chutes', label: 'Chutes.ai', api_base: 'https://llm.chutes.ai/v1', keyRequired: true, defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
+  { id: 'openrouter', label: 'OpenRoute/OpenRouter', api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
+  { id: 'anthropic', label: 'Anthropic', api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
+  { id: 'ollama', label: 'Ollama', api_base: 'http://127.0.0.1:11434/v1', keyRequired: false, defaultModel: 'qwen3.5:4b' },
+  { id: 'lmstudio', label: 'LM Studio', api_base: 'http://127.0.0.1:1234/v1', keyRequired: false, defaultModel: '' },
+  { id: 'llamacpp', label: 'llama.cpp server', api_base: 'http://127.0.0.1:8080/v1', keyRequired: false, defaultModel: '' },
+];
+
+function detectPresetFromBase(base) {
+  const raw = String(base || '').toLowerCase();
+  if (!raw) return 'custom';
+  const preset = AI_PRESETS.find((p) => raw.startsWith(String(p.api_base).toLowerCase()));
+  return preset ? preset.id : 'custom';
+}
+
 function LangPicker() {
   const wrap = el('div', { className: 'lang-wrap' });
   const sel  = el('select', { className: 'lang-select' });
@@ -142,13 +189,20 @@ function LangPicker() {
 function SearchForm(value, onSearch) {
   const form  = el('form', { className: 'search-form' });
   const sicon = el('span', { className: 'search-icon', html: ICONS.search });
+  const listId = `search-history-list-${Math.random().toString(36).slice(2, 8)}`;
   const input = el('input', {
     className: 'search-input', type: 'search',
     placeholder: 'Search...', value: value || '',
     autocomplete: 'off', autocorrect: 'off', autocapitalize: 'off', spellcheck: 'false',
+    ...(state.historyEnabled ? { list: listId } : {}),
   });
   const btn = el('button', { className: 'search-btn', type: 'submit', html: ICONS.search });
   form.append(sicon, input, btn);
+  if (state.historyEnabled && state.searchHistory.length) {
+    const dl = el('datalist', { id: listId });
+    state.searchHistory.slice(0, 12).forEach((q) => dl.append(el('option', { value: q })));
+    form.append(dl);
+  }
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const q = input.value.trim();
@@ -531,6 +585,7 @@ async function runSearchProgressive(q, lang, category) {
 
 async function doSearch(q, category = state.category) {
   if (!q.trim()) return;
+  addSearchToHistory(q);
   state.category = ['web', 'images', 'news'].includes(category) ? category : 'web';
   state.loading = true;
   state.results = [];
@@ -728,7 +783,10 @@ function renderApp() {
 function renderHome(app) {
   const home = el('div', { className: 'home' },
     el('div', { className: 'home-logo' }, 'Term', el('strong', {}, 'Search')),
-    el('div', { className: 'home-tagline' }, 'Personal search engine · privacy-first · local-first'),
+    el('div', { className: 'home-tagline' },
+      el('span', { className: 'tagline-desktop' }, 'Personal search engine · privacy-first · local-first'),
+      el('span', { className: 'tagline-mobile' }, 'Private search · local-first'),
+    ),
     el('div', { className: 'home-search' }, SearchForm('', (q) => { state.query = q; state.category = 'web'; doSearch(q, 'web'); })),
     el('div', { className: 'home-actions' },
       LangPicker(),
@@ -767,6 +825,7 @@ async function renderSettings() {
   const brave  = cfg.brave  || {};
   const mojeek = cfg.mojeek || {};
   const searxng = cfg.searxng || {};
+  const detectedPreset = detectPresetFromBase(ai.api_base);
 
   const header = el('div', { className: 'header' },
     el('button', { className: 'btn', onClick: () => history.back() }, iconEl('back'), ' Back'),
@@ -788,11 +847,119 @@ async function renderSettings() {
   }
 
   const saveAlertEl = el('div', { style: 'display:none' });
+  const aiModelStatus = el('div', { id: 'ai-model-status', style: 'display:none' });
+  const historyInfoEl = el('div', { id: 'history-preview', className: 'form-hint', style: 'margin-top:8px' });
+  const presetSelect = el('select', { className: 'form-input', id: 'ai-preset' });
+  presetSelect.append(el('option', { value: 'custom' }, 'Custom'));
+  AI_PRESETS.forEach((preset) => {
+    const opt = el('option', { value: preset.id }, preset.label);
+    if (preset.id === detectedPreset) opt.selected = true;
+    presetSelect.append(opt);
+  });
+  const modelInput = makeInput('ai-model', ai.model, 'qwen3.5:4b');
+  modelInput.setAttribute('list', 'ai-model-list');
+  const modelDataList = el('datalist', { id: 'ai-model-list' });
+
+  function setModelStatus(message, type = 'info') {
+    aiModelStatus.style.display = 'block';
+    aiModelStatus.className = `alert alert-${type}`;
+    aiModelStatus.textContent = message;
+  }
+
+  function renderHistoryPreview() {
+    if (!state.historyEnabled) {
+      historyInfoEl.textContent = 'Search history disabled.';
+      return;
+    }
+    if (!state.searchHistory.length) {
+      historyInfoEl.textContent = 'No searches saved yet.';
+      return;
+    }
+    historyInfoEl.textContent = `Recent: ${state.searchHistory.slice(0, 8).join(' · ')}`;
+  }
+
+  function populateModelList(models) {
+    modelDataList.innerHTML = '';
+    for (const model of models) {
+      modelDataList.append(el('option', { value: model }));
+    }
+  }
+
+  async function loadModels(trigger = 'manual') {
+    const base = val('ai-base');
+    const key = val('ai-key');
+    const presetId = val('ai-preset');
+    if (!base) {
+      setModelStatus('Set API endpoint first.', 'info');
+      return;
+    }
+    const preset = AI_PRESETS.find((p) => p.id === presetId);
+    if (preset?.keyRequired && !key) {
+      setModelStatus(`Insert API key for ${preset.label} to load models.`, 'info');
+      return;
+    }
+
+    const btn = document.getElementById('ai-load-models-btn');
+    if (btn) btn.disabled = true;
+    setModelStatus('Loading models…', 'info');
+    try {
+      const res = await api('/api/config/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_base: base, api_key: key, preset: presetId }),
+      });
+      const models = Array.isArray(res.models) ? res.models : [];
+      if (!models.length) {
+        setModelStatus(`No models found${res.provider ? ` for ${res.provider}` : ''}.`, 'err');
+        return;
+      }
+      populateModelList(models);
+      const current = val('ai-model');
+      if (!current || !models.includes(current)) {
+        const modelField = document.getElementById('ai-model');
+        if (modelField) modelField.value = models[0];
+      }
+      setModelStatus(`Loaded ${models.length} model(s)${res.provider ? ` from ${res.provider}` : ''}.`, 'ok');
+    } catch (e) {
+      setModelStatus(`Model load failed: ${e.message}`, 'err');
+    } finally {
+      if (btn) btn.disabled = false;
+      if (trigger === 'manual') {
+        setTimeout(() => { aiModelStatus.style.display = 'none'; }, 4500);
+      }
+    }
+  }
+
+  function applyPreset() {
+    const presetId = val('ai-preset');
+    const preset = AI_PRESETS.find((p) => p.id === presetId);
+    const hintEl = document.getElementById('ai-preset-hint');
+    if (!preset) {
+      if (hintEl) hintEl.textContent = 'Custom endpoint mode.';
+      return;
+    }
+    const baseField = document.getElementById('ai-base');
+    const modelField = document.getElementById('ai-model');
+    if (baseField) baseField.value = preset.api_base;
+    if (modelField && (!modelField.value || modelField.value === ai.model) && preset.defaultModel) {
+      modelField.value = preset.defaultModel;
+    }
+    if (hintEl) {
+      hintEl.textContent = preset.keyRequired
+        ? `Preset ready: insert API key for ${preset.label}, then load models.`
+        : `Preset ready: local endpoint (${preset.label}).`;
+    }
+    if (!preset.keyRequired || val('ai-key')) {
+      loadModels('preset');
+    }
+  }
 
   async function saveSettings() {
     const aiKey = val('ai-key');
     const braveKey = val('brave-key');
     const mojeekKey = val('mojeek-key');
+    setHistoryEnabled(isChecked('history-enabled'));
+    renderHistoryPreview();
     const update = {
       ai: {
         api_base: val('ai-base'),
@@ -920,15 +1087,23 @@ async function renderSettings() {
     el('div', { className: 'settings-section' },
       el('h2', {}, 'AI Configuration (optional)'),
       el('div', { className: 'alert alert-info', style: 'margin-bottom:12px;font-size:11px' },
-        'Any OpenAI-compatible endpoint: Ollama, LM Studio, Groq, OpenAI, Z.AI, Chutes.ai…'
+        'Preset ready: just set key (if required), load models, save.'
+      ),
+      el('div', { className: 'form-group' },
+        el('label', { className: 'form-label', for: 'ai-preset' }, 'Preset'),
+        presetSelect,
+        el('div', { className: 'form-row', style: 'margin-top:6px' },
+          el('button', { id: 'ai-preset-apply-btn', className: 'btn', onClick: applyPreset, type: 'button' }, 'Apply preset'),
+          el('span', { id: 'ai-preset-hint', className: 'form-hint', style: 'margin-top:0' }, 'Select a preset to prefill endpoint/model.'),
+        ),
       ),
       el('div', { className: 'form-group' },
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Localhost: localhost:11434/v1 (Ollama) · localhost:1234/v1 (LM Studio)',
+          'Included presets: Chutes.ai · Anthropic · OpenAI · OpenRoute/OpenRouter · llama.cpp · Ollama · LM Studio',
           el('br', {}),
-          'Chutes/OpenAI-compatible: llm.chutes.ai/v1 · OpenAI: api.openai.com/v1',
+          'You can also keep custom OpenAI-compatible endpoints.',
         ),
       ),
       el('div', { className: 'form-group' },
@@ -938,17 +1113,44 @@ async function renderSettings() {
       ),
       el('div', { className: 'form-group' },
         el('label', { className: 'form-label', for: 'ai-model' }, 'Model'),
-        makeInput('ai-model', ai.model, 'qwen3.5:4b'),
-        el('div', { className: 'form-hint' },
-          'Localhost: qwen3.5:4b, llama3.2, mistral… · Chutes: deepseek-ai/DeepSeek-V3.2-TEE',
-          el('br', {}), 'OpenAI: gpt-4o-mini',
+        modelInput,
+        modelDataList,
+        el('div', { className: 'form-row', style: 'margin-top:6px' },
+          el('button', { id: 'ai-load-models-btn', className: 'btn', onClick: () => loadModels('manual'), type: 'button' }, 'Load models'),
+          el('span', { className: 'form-hint', style: 'margin-top:0' }, 'Auto-loads from endpoint with current key.'),
         ),
+        aiModelStatus,
       ),
       el('div', { className: 'form-row', style: 'margin-top:4px' },
         el('button', { id: 'ai-test-btn', className: 'btn btn-primary', onClick: testAi }, 'Test Connection'),
         el('button', { className: 'btn btn-primary', onClick: saveSettings }, 'Save'),
       ),
       el('div', { id: 'ai-test-result', style: 'display:none' }),
+    ),
+
+    // Search history
+    el('div', { className: 'settings-section' },
+      el('h2', {}, 'Search History'),
+      el('div', { className: 'toggle-row' },
+        el('span', { className: 'toggle-label' }, 'Save search history'),
+        el('label', { className: 'toggle' },
+          el('input', { type: 'checkbox', id: 'history-enabled', ...(state.historyEnabled ? { checked: '' } : {}) }),
+          el('span', { className: 'toggle-slider' }),
+        ),
+      ),
+      historyInfoEl,
+      el('div', { style: 'margin-top:10px;display:flex;gap:8px;align-items:center' },
+        el('button', {
+          className: 'btn',
+          type: 'button',
+          onClick: () => {
+            state.searchHistory = [];
+            localStorage.removeItem('ts-history');
+            renderHistoryPreview();
+          },
+        }, 'Clear history'),
+        el('button', { className: 'btn btn-primary', onClick: saveSettings, type: 'button' }, 'Save preference'),
+      ),
     ),
 
     // Providers
@@ -1014,7 +1216,7 @@ async function renderSettings() {
     // Server info
     el('div', { className: 'settings-section' },
       el('h2', {}, 'Server Info'),
-      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.0')),
+      el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Version'),          el('span', { className: 'info-val' }, health?.version || '0.3.1')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'Active providers'), el('span', { className: 'info-val' }, (health?.providers || []).join(', ') || 'none')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'AI'),               el('span', { className: 'info-val' }, health?.ai_enabled ? `enabled (${health.ai_model})` : 'not configured')),
       el('div', { className: 'info-row' }, el('span', { className: 'info-key' }, 'GitHub'),           el('a', { href: 'https://github.com/DioNanos/termsearch', target: '_blank', className: 'info-val', style: 'color:var(--link)' }, 'DioNanos/termsearch')),
@@ -1041,6 +1243,26 @@ async function renderSettings() {
   );
 
   app.append(header, main);
+  renderHistoryPreview();
+  document.getElementById('history-enabled')?.addEventListener('change', (e) => {
+    setHistoryEnabled(Boolean(e.target?.checked));
+    renderHistoryPreview();
+  });
+  document.getElementById('ai-key')?.addEventListener('change', () => loadModels('auto'));
+  document.getElementById('ai-base')?.addEventListener('change', () => loadModels('auto'));
+  presetSelect.addEventListener('change', applyPreset);
+  if (detectedPreset && detectedPreset !== 'custom') {
+    const hintEl = document.getElementById('ai-preset-hint');
+    const preset = AI_PRESETS.find((p) => p.id === detectedPreset);
+    if (hintEl && preset) {
+      hintEl.textContent = preset.keyRequired
+        ? `Preset detected: ${preset.label}. Insert key and load models.`
+        : `Preset detected: ${preset.label}.`;
+    }
+  }
+  if (ai.api_base && (!AI_PRESETS.find((p) => p.id === detectedPreset)?.keyRequired)) {
+    loadModels('auto');
+  }
 }
 
 // ─── Bootstrap ────────────────────────────────────────────────────────────

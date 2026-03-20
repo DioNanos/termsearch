@@ -1,6 +1,6 @@
 # TermSearch - Personal Search Engine
 
-[![Status](https://img.shields.io/badge/Status-0.3.0-blue.svg)](#project-status)
+[![Status](https://img.shields.io/badge/Status-0.3.1-blue.svg)](#project-status)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
 [![Target](https://img.shields.io/badge/Target-Termux%20%2F%20Linux%20%2F%20macOS-green.svg)](https://termux.dev)
@@ -22,7 +22,7 @@ Core capabilities:
 
 ## Project Status
 
-- Current line: `0.3.0`
+- Current line: `0.3.1`
 - Core is MIT — zero required API keys
 - AI features are optional, configured via Settings page in browser
 - Tested on: Ubuntu 24.04, Termux (Android 15/16)

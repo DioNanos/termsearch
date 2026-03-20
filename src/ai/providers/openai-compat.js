@@ -56,6 +56,151 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function isAnthropicBase(base) {
+  return /anthropic\.com/i.test(base);
+}
+
+function normalizeAnthropicBase(base) {
+  const clean = String(base || '').replace(/\/$/, '');
+  return /\/v1$/i.test(clean) ? clean : `${clean}/v1`;
+}
+
+function buildAnthropicHeaders(apiKey) {
+  return {
+    'Content-Type': 'application/json',
+    'anthropic-version': '2023-06-01',
+    ...(apiKey ? { 'x-api-key': apiKey } : {}),
+  };
+}
+
+function extractAnthropicText(payload) {
+  const parts = Array.isArray(payload?.content) ? payload.content : [];
+  return parts
+    .map((part) => (part?.type === 'text' ? String(part?.text || '') : ''))
+    .join('')
+    .trim();
+}
+
+async function callAnthropic(prompt, {
+  apiBase,
+  apiKey,
+  model,
+  maxTokens = 1200,
+  timeoutMs = 90_000,
+  systemPrompt = null,
+  temperature = 0.3,
+} = {}) {
+  if (!apiKey) throw buildAiError('ai_provider_auth', 'ai 401: authentication failed');
+  const base = normalizeAnthropicBase(apiBase);
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    messages: [{ role: 'user', content: prompt }],
+  };
+  if (systemPrompt) body.system = systemPrompt;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${base}/messages`, {
+      method: 'POST',
+      headers: buildAnthropicHeaders(apiKey),
+      body: JSON.stringify(body),
+      signal: ac.signal,
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw buildAiError('ai_provider_auth', `ai ${response.status}: authentication failed`);
+    }
+    if (response.status === 429) {
+      throw buildAiError('ai_rate_limited_provider', 'ai 429: rate limit exceeded');
+    }
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      throw new Error(`ai ${response.status}: ${errBody.slice(0, 220)}`);
+    }
+    const data = await response.json();
+    return {
+      content: extractAnthropicText(data),
+      reasoning: '',
+      model: data?.model || model,
+    };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function streamAnthropic(prompt, onToken, {
+  apiBase,
+  apiKey,
+  model,
+  maxTokens = 1200,
+  timeoutMs = 90_000,
+  systemPrompt = null,
+  temperature = 0.3,
+} = {}) {
+  if (!apiKey) throw buildAiError('ai_provider_auth', 'ai 401: authentication failed');
+  const base = normalizeAnthropicBase(apiBase);
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    temperature,
+    stream: true,
+    messages: [{ role: 'user', content: prompt }],
+  };
+  if (systemPrompt) body.system = systemPrompt;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${base}/messages`, {
+      method: 'POST',
+      headers: buildAnthropicHeaders(apiKey),
+      body: JSON.stringify(body),
+      signal: ac.signal,
+    });
+    if (response.status === 401 || response.status === 403) {
+      throw buildAiError('ai_provider_auth', `ai ${response.status}: authentication failed`);
+    }
+    if (response.status === 429) {
+      throw buildAiError('ai_rate_limited_provider', 'ai 429: rate limit exceeded');
+    }
+    if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      throw new Error(`ai ${response.status}: ${errBody.slice(0, 220)}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullContent = '';
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (!raw || raw === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(raw);
+          const chunk = parsed?.delta?.text || parsed?.text || '';
+          if (!chunk) continue;
+          fullContent += chunk;
+          onToken(chunk, fullContent);
+        } catch {
+          // ignore malformed SSE chunk
+        }
+      }
+    }
+    return { content: fullContent.trim(), reasoning: '', model };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Single non-streaming call with retry logic
 // Returns { content, reasoning, model } or throws
 export async function call(prompt, {
@@ -70,6 +215,9 @@ export async function call(prompt, {
 } = {}) {
   const base = String(apiBase || '').replace(/\/$/, '');
   if (!base || !model) throw buildAiError('ai_unavailable', 'AI not configured');
+  if (isAnthropicBase(base)) {
+    return callAnthropic(prompt, { apiBase: base, apiKey, model, maxTokens, timeoutMs, systemPrompt, temperature });
+  }
 
   const messages = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }]
@@ -155,6 +303,9 @@ export async function stream(prompt, onToken, {
 } = {}) {
   const base = String(apiBase || '').replace(/\/$/, '');
   if (!base || !model) throw buildAiError('ai_unavailable', 'AI not configured');
+  if (isAnthropicBase(base)) {
+    return streamAnthropic(prompt, onToken, { apiBase: base, apiKey, model, maxTokens, timeoutMs, systemPrompt, temperature });
+  }
 
   const messages = systemPrompt
     ? [{ role: 'system', content: systemPrompt }, { role: 'user', content: prompt }]

@@ -32,7 +32,7 @@ function info(msg) { console.log(`  ${CYAN}→${RESET} ${msg}`); }
 
 // ─── Package version ──────────────────────────────────────────────────────
 
-let VERSION = '0.3.0';
+let VERSION = '0.3.1';
 try { VERSION = JSON.parse(readFileSync(PKG_PATH, 'utf8')).version || VERSION; } catch { /* ignore */ }
 
 // ─── Data dir + paths ─────────────────────────────────────────────────────
