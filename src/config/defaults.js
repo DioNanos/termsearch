@@ -49,6 +49,18 @@ export const DEFAULTS = {
     api_base: 'https://api.mojeek.com',
   },
 
+  startpage: {
+    enabled: true,
+  },
+
+  qwant: {
+    enabled: true,
+  },
+
+  ecosia: {
+    enabled: true,
+  },
+
   yandex: {
     enabled: true,
   },

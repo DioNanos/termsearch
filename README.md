@@ -21,7 +21,7 @@ Opens `http://localhost:3000`. That's it.
 
 ## What You Get
 
-**Search** — DuckDuckGo, Wikipedia, Startpage, Qwant, Ecosia, GitHub, Yandex, Marginalia, Ahmia out of the box. Add Brave, Mojeek, or your own SearXNG for more coverage. Engine picker lets you mix and match per-search.
+**Search** — DuckDuckGo, Wikipedia, Startpage, Qwant, Ecosia, GitHub, Yandex, Marginalia, Ahmia out of the box. Add Brave, Mojeek, or your own SearXNG for more coverage. Engine picker lets you mix and match per-search, and the new web scrapers can be toggled in Settings.
 
 **AI Summaries** — Connect any OpenAI-compatible endpoint (Ollama, LM Studio, llama.cpp, Chutes.ai, OpenRoute.ai, Anthropic, OpenAI). 2-phase agentic flow: AI picks sources, reads pages, synthesizes an answer. Session memory carries context across queries.
 
@@ -77,6 +77,8 @@ Load Models button auto-discovers available models from the endpoint.
 ## Search Engines
 
 **Zero-config** (no API key): DuckDuckGo, Wikipedia, Startpage, Qwant, Ecosia, GitHub, Yandex, Ahmia, Marginalia
+
+**Toggles in Settings**: Startpage, Qwant, Ecosia, Yandex, Ahmia, Marginalia
 
 **API key** (toggle in Settings): Brave Search, Mojeek
 

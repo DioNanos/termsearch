@@ -304,7 +304,9 @@ function isEngineAvailable(engine) {
   if (engine === 'yandex')     return cfg.yandex?.enabled !== false;
   if (engine === 'ahmia')      return cfg.ahmia?.enabled !== false;
   if (engine === 'marginalia') return cfg.marginalia?.enabled !== false;
-  if (engine === 'startpage' || engine === 'qwant' || engine === 'ecosia') return true;
+  if (engine === 'startpage') return (state.config?.startpage?.enabled) !== false;
+  if (engine === 'qwant')     return (state.config?.qwant?.enabled)     !== false;
+  if (engine === 'ecosia')    return (state.config?.ecosia?.enabled)     !== false;
   if (SEARXNG_ROUTED.has(engine)) return Boolean(cfg.searxng?.enabled && cfg.searxng?.url);
   return true; // duckduckgo, wikipedia, github, github-api — sempre disponibili
 }
@@ -1298,8 +1300,11 @@ async function renderSettings() {
   const brave  = cfg.brave  || {};
   const mojeek = cfg.mojeek || {};
   const searxng = cfg.searxng || {};
-  const yandexCfg = cfg.yandex || {};
-  const ahmiaCfg = cfg.ahmia || {};
+  const startpageCfg  = cfg.startpage  || {};
+  const qwantCfg      = cfg.qwant      || {};
+  const ecosiaCfg     = cfg.ecosia     || {};
+  const yandexCfg     = cfg.yandex     || {};
+  const ahmiaCfg      = cfg.ahmia      || {};
   const marginaliaCfg = cfg.marginalia || {};
   const detectedPreset = detectPresetFromBase(ai.api_base);
 
@@ -1478,6 +1483,9 @@ async function renderSettings() {
       brave:  { enabled: isChecked('brave-enabled') },
       mojeek: { enabled: isChecked('mojeek-enabled') },
       searxng:{ url: val('searxng-url'),                       enabled: isChecked('searxng-enabled') },
+      startpage:  { enabled: isChecked('startpage-enabled') },
+      qwant:      { enabled: isChecked('qwant-enabled') },
+      ecosia:     { enabled: isChecked('ecosia-enabled') },
       yandex:     { enabled: isChecked('yandex-enabled') },
       ahmia:      { enabled: isChecked('ahmia-enabled') },
       marginalia: { enabled: isChecked('marginalia-enabled') },
@@ -1719,6 +1727,33 @@ async function renderSettings() {
           el('button', { className: 'btn', onClick: () => testProvider('searxng') }, 'Test'),
         ),
         el('div', { id: 'provider-test-searxng', style: 'display:none' }),
+      ),
+
+      // Web Scrapers (zero-config)
+      el('div', { style: 'padding:10px 0;border-bottom:1px solid var(--border2)' },
+        el('div', { style: 'font-size:11px;color:var(--text2);margin-bottom:8px;letter-spacing:0.04em;text-transform:uppercase' }, 'Web Scrapers (zero-config)'),
+        el('div', { className: 'toggle-row' },
+          el('span', { className: 'toggle-label' }, 'Startpage (Google proxy, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'startpage-enabled', ...(startpageCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'toggle-row', style: 'margin-top:6px' },
+          el('span', { className: 'toggle-label' }, 'Qwant (EU index, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'qwant-enabled', ...(qwantCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'toggle-row', style: 'margin-top:6px' },
+          el('span', { className: 'toggle-label' }, 'Ecosia (Bing-based, no key)'),
+          el('label', { className: 'toggle' },
+            el('input', { type: 'checkbox', id: 'ecosia-enabled', ...(ecosiaCfg.enabled !== false ? { checked: '' } : {}) }),
+            el('span', { className: 'toggle-slider' }),
+          ),
+        ),
+        el('div', { className: 'form-hint', style: 'margin-top:6px' }, 'HTML scrapers — active by default. May hit CAPTCHA under heavy use.'),
       ),
 
       // Uncensored / Alternative

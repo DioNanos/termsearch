@@ -106,19 +106,19 @@ const PROVIDER_REGISTRY = {
   },
   startpage: {
     aliases: new Set(['startpage']),
-    enabled: (_cfg) => true,
+    enabled: (cfg) => cfg?.startpage?.enabled !== false,
     run: startpage.search,
     defaultProvider: true,
   },
   qwant: {
     aliases: new Set(['qwant']),
-    enabled: (_cfg) => true,
+    enabled: (cfg) => cfg?.qwant?.enabled !== false,
     run: qwant.search,
     defaultProvider: true,
   },
   ecosia: {
     aliases: new Set(['ecosia']),
-    enabled: (_cfg) => true,
+    enabled: (cfg) => cfg?.ecosia?.enabled !== false,
     run: ecosia.search,
     defaultProvider: true,
   },
