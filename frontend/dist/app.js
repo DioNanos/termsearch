@@ -267,6 +267,7 @@ const AI_PRESETS = [
   { id: 'chutes',   label: 'Chutes.ai TEE',            api_base: 'https://llm.chutes.ai/v1',  keyRequired: true,  defaultModel: 'deepseek-ai/DeepSeek-V3.2-TEE' },
   { id: 'anthropic',label: 'Anthropic',                api_base: 'https://api.anthropic.com/v1', keyRequired: true, defaultModel: 'claude-3-5-haiku-latest' },
   { id: 'openai',   label: 'OpenAI',                   api_base: 'https://api.openai.com/v1', keyRequired: true,  defaultModel: 'gpt-4o-mini' },
+  { id: 'openrouter', label: 'OpenRoute/OpenRouter',   api_base: 'https://openrouter.ai/api/v1', keyRequired: true, defaultModel: 'openai/gpt-4o-mini' },
 ];
 
 const ENGINE_GROUPS = [
@@ -1053,12 +1054,12 @@ function renderApp() {
   const mobileBar = el('div', { className: 'mobile-bar' },
     el('div', { className: 'mobile-bar-search' }, SearchForm(state.query, (q, cat) => { state.query = q; doSearch(q, cat); })),
     mobileTabs,
+    el('div', { className: 'mobile-bar-engine' }, EnginePicker()),
     el('div', { className: 'mobile-bar-row' },
       el('div', {
         className: 'mobile-logo',
         onClick: () => { state.query = ''; state.category = 'web'; navigate('#/'); renderApp(); },
       }, 'Term', el('strong', {}, 'Search')),
-      EnginePicker(),
       LangPicker(),
       el('button', { className: 'btn-icon', title: 'Settings',     onClick: () => navigate('#/settings') }, iconEl('settings')),
       el('button', { className: 'btn-icon', title: 'Toggle theme', onClick: toggleTheme }, iconEl('theme')),
@@ -1475,7 +1476,7 @@ async function renderSettings() {
         el('label', { className: 'form-label', for: 'ai-base' }, 'API Endpoint'),
         makeInput('ai-base', ai.api_base, 'http://localhost:11434/v1'),
         el('div', { className: 'form-hint' },
-          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI',
+          'Included presets: LocalHost (Ollama · LM Studio · llama.cpp) · Chutes.ai TEE · Anthropic · OpenAI · OpenRoute/OpenRouter',
           el('br', {}),
           'You can also keep custom OpenAI-compatible endpoints.',
         ),

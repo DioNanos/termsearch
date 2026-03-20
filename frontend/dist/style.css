@@ -962,13 +962,13 @@ a:hover { color: var(--link-h); }
   scrollbar-width: none;
 }
 .mobile-bar-tabs::-webkit-scrollbar { display: none; }
+.mobile-bar-engine { padding: 0 12px 4px; }
 .mobile-bar-row    {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 4px 12px 2px;
 }
-.mobile-bar-row .engine-picker { flex-shrink: 0; }
 .mobile-bar-row .lang-wrap { margin-left: auto; }
 
 /* ─── Responsive ──────────────────────────────────────────────────────────── */
@@ -978,7 +978,8 @@ a:hover { color: var(--link-h); }
   .main { padding-bottom: calc(20px + var(--mobile-bar-height, 0px) + env(safe-area-inset-bottom, 0px)); }
 
   .cat-tab { font-size: 10px; padding: 4px 8px; }
-  .mobile-bar-row .engine-picker-summary { font-size: 11px; padding: 3px 6px; }
+  .mobile-bar-engine .engine-picker { width: 100%; margin-left: 0; }
+  .mobile-bar-engine .engine-picker-summary { width: 100%; justify-content: space-between; }
   .engine-picker-body { width: calc(100vw - 24px); right: -6px; bottom: calc(100% + 8px); top: auto; }
   .logo-text { font-size: 15px; }
   .home-logo { font-size: 40px; }

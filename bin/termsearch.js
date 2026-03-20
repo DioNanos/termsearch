@@ -376,7 +376,7 @@ async function cmdAutostart(sub) {
 async function cmdDefault(flags) {
   const { running, pid } = getStatus();
   if (running) {
-    cmdStatus();
+    await cmdStatus();
   } else {
     await cmdStart(flags);
     if (getStatus().running) {

@@ -1,10 +1,10 @@
 {
   "name": "termsearch",
-  "version": "0.3.5",
+  "version": "0.3.6",
   "description": "Personal search engine for Termux/Linux/macOS — zero-config, privacy-first, AI-optional",
   "type": "module",
   "bin": {
-    "termsearch": "./bin/termsearch.js"
+    "termsearch": "bin/termsearch.js"
   },
   "main": "./src/server.js",
   "files": [
@@ -43,6 +43,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/DioNanos/termsearch"
+    "url": "git+https://github.com/DioNanos/termsearch.git"
   }
 }
