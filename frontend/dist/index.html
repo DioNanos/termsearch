@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TermSearch" />
+  <meta name="theme-color" content="#0d0d0d" />
+  <meta name="description" content="TermSearch — personal search engine, privacy-first, local-first" />
+  <title>TermSearch</title>
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="TermSearch" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
+  <script>
+    // Apply saved theme before page renders (prevents flash)
+    if (localStorage.getItem('ts-theme') === 'light') document.documentElement.classList.add('light');
+    // Deregister old service workers
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(r => r.forEach(sw => sw.unregister()));
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
