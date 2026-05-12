@@ -179,3 +179,13 @@ termsearch autostart enable   # optional: start on boot
 ## License
 
 MIT — Copyright (c) 2026 Davide A. Guglielmi
+
+---
+
+## Contact
+
+Maintained by [DioNanos](https://github.com/DioNanos).
+
+- General / dev: **dev@mmmbuto.com**
+- Security disclosures: **security@mmmbuto.com**
+- Project hub: <https://mmmbuto.com>
