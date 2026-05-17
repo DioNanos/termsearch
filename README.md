@@ -1,7 +1,7 @@
 # TermSearch
 
 [![Version](https://img.shields.io/npm/v/termsearch.svg)](https://www.npmjs.com/package/termsearch)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-18%2B-green.svg)](https://nodejs.org)
 [![Platform](https://img.shields.io/badge/Termux%20%7C%20Linux%20%7C%20macOS-green.svg)](#)
 [![npm](https://img.shields.io/badge/npm-termsearch-red.svg)](https://www.npmjs.com/package/termsearch)
@@ -178,7 +178,7 @@ termsearch autostart enable   # optional: start on boot
 
 ## License
 
-MIT — Copyright (c) 2026 Davide A. Guglielmi
+Apache-2.0. See [LICENSE](LICENSE).
 
 ---
 
