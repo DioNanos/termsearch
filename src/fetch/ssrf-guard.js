@@ -13,12 +13,25 @@ const PRIVATE_V4_PREFIXES = [
   '192.168.', '127.', '169.254.', '0.',
 ];
 
+function isPrivateV4(ip) {
+  return PRIVATE_V4_PREFIXES.some((prefix) => ip.startsWith(prefix));
+}
+
 export function isPrivateIp(ip) {
   if (!ip) return true;
   if (net.isIPv6(ip)) {
-    return ip === '::1' || ip.startsWith('fc') || ip.startsWith('fd') || ip.startsWith('fe80');
+    const lower = ip.toLowerCase();
+    // Unspecified (::) routes to loopback on many stacks — treat as internal.
+    if (lower === '::' || lower === '::1') return true;
+    // IPv4-mapped/-compatible IPv6 (::ffff:127.0.0.1, ::127.0.0.1): the
+    // embedded IPv4 is the real target — validate it as v4, else it bypasses
+    // the v4 prefix rules entirely (e.g. ::ffff:169.254.169.254 metadata).
+    const mapped = lower.match(/(?:::ffff:|::)(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})$/);
+    if (mapped) return isPrivateV4(mapped[1]);
+    // ULA (fc00::/7) and link-local (fe80::/10).
+    return lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80');
   }
-  return PRIVATE_V4_PREFIXES.some((prefix) => ip.startsWith(prefix));
+  return isPrivateV4(ip);
 }
 
 export async function assertPublicUrl(rawUrl) {

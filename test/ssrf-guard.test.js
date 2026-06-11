@@ -14,6 +14,19 @@ test('isPrivateIp flags loopback, RFC1918, link-local and IPv6 ULA', () => {
   }
 });
 
+test('isPrivateIp blocks IPv4-mapped IPv6 and unspecified address', () => {
+  // The embedded IPv4 is the real target; mapping it as IPv6 must not bypass
+  // the v4 private rules (e.g. cloud metadata at ::ffff:169.254.169.254).
+  for (const ip of [
+    '::ffff:127.0.0.1', '::ffff:10.0.0.1', '::ffff:192.168.1.1',
+    '::ffff:169.254.169.254', '::127.0.0.1', '::',
+  ]) {
+    assert.equal(isPrivateIp(ip), true, `${ip} should be private`);
+  }
+  // A mapped *public* IPv4 stays reachable.
+  assert.equal(isPrivateIp('::ffff:8.8.8.8'), false, '::ffff:8.8.8.8 should be public');
+});
+
 test('assertPublicUrl rejects non-http(s) and localhost', async () => {
   await assert.rejects(() => assertPublicUrl('ftp://example.com'), /http\/https/);
   await assert.rejects(() => assertPublicUrl('http://localhost/'), /Local addresses/);
