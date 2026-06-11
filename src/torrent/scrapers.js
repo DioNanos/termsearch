@@ -1,7 +1,7 @@
 // Torrent scrapers — multi-source, no API keys required
 // Sources: TPB, 1337x, YTS (JSON API), Nyaa, EZTV (API), Torrent Galaxy
 
-import { assertPublicUrl } from '../fetch/ssrf-guard.js';
+import { safeFetch } from '../fetch/ssrf-guard.js';
 
 const TPB_MIRRORS = [
   'https://tpb.party',
@@ -244,8 +244,23 @@ export async function scrapeTGx(query, limit = 6) {
 // ─── Magnet extraction from URL ───────────────────────────────────────────────
 
 export async function extractMagnetFromUrl(rawUrl) {
-  await assertPublicUrl(rawUrl);
-  const html   = await fetchTorrentPage(rawUrl, 10_000);
+  // User-controlled URL: route through safeFetch so the connection's DNS
+  // lookup is re-validated (closes the DNS-rebinding TOCTOU).
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 10_000);
+  let html = '';
+  try {
+    const r = await safeFetch(rawUrl, {
+      headers: { 'User-Agent': TORRENT_UA, Accept: 'text/html,*/*;q=0.5' },
+      signal: ac.signal,
+      maxBytes: 300_000,
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const buf = await r.arrayBuffer();
+    html = Buffer.from(buf).subarray(0, 300_000).toString('utf8');
+  } finally {
+    clearTimeout(timer);
+  }
   const magnet = extractMagnetFromHtml(html);
   if (!magnet) throw new Error('No magnet link found on page');
   return magnet;

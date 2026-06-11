@@ -1,7 +1,7 @@
 // URL fetcher + HTML to readable text extraction
 // Used by AI summary to fetch page content
 
-import { assertPublicUrl } from './ssrf-guard.js';
+import { assertPublicUrl, safeFetch } from './ssrf-guard.js';
 
 const FETCH_MAX_BYTES = 180_000;
 
@@ -151,13 +151,15 @@ export async function fetchReadableDocument(rawUrl, { timeoutMs = 12000, docCach
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   let response;
   try {
-    response = await fetch(parsed.toString(), {
+    // safeFetch pins SSRF validation to the connection DNS lookup (and every
+    // redirect hop), closing the rebinding TOCTOU vs. a plain re-resolving fetch.
+    response = await safeFetch(parsed.toString(), {
       headers: {
         'User-Agent': 'TermSearchFetch/1.0',
         Accept: 'text/html, text/plain;q=0.9,*/*;q=0.5',
       },
       signal: ac.signal,
-      redirect: 'follow',
+      maxBytes: FETCH_MAX_BYTES,
     });
   } finally {
     clearTimeout(timer);
@@ -216,13 +218,13 @@ export async function scanSitePages(baseUrl, query, maxPages = 4, { timeoutMs = 
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   let html = '';
   try {
-    const response = await fetch(base.toString(), {
+    const response = await safeFetch(base.toString(), {
       headers: {
         'User-Agent': 'TermSearchFetch/1.0',
         Accept: 'text/html,*/*;q=0.5',
       },
       signal: ac.signal,
-      redirect: 'follow',
+      maxBytes: FETCH_MAX_BYTES,
     });
     if (!response.ok) return [];
     const buffer = await response.arrayBuffer();
