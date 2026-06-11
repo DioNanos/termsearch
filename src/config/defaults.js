@@ -4,6 +4,10 @@
 export const DEFAULTS = {
   port: 3000,
   host: '127.0.0.1',
+  // Trust X-Forwarded-* headers. OFF by default — the server binds to loopback,
+  // so trusting these would let clients spoof their IP and bypass rate limits.
+  // Set to true (or an Express trust-proxy value) only behind a real reverse proxy.
+  trust_proxy: false,
 
   search: {
     providers: ['duckduckgo', 'wikipedia'],

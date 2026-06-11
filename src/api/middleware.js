@@ -1,5 +1,62 @@
 // Express middleware: security headers, rate limiting, IP utilities
 
+// Hostnames accepted in the Host / Origin / Referer headers. The server only
+// binds to loopback, so any request whose Host is a different name is either a
+// DNS-rebinding attempt (a malicious page resolving an attacker domain to
+// 127.0.0.1) or a misconfiguration — reject it.
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+
+function hostnameFromHostHeader(hostHeader) {
+  const raw = String(hostHeader || '').trim().toLowerCase();
+  if (!raw) return { host: '', port: '' };
+  if (raw.startsWith('[')) {
+    // IPv6 literal, e.g. [::1]:3000
+    const end = raw.indexOf(']');
+    if (end === -1) return { host: raw, port: '' };
+    return { host: raw.slice(0, end + 1), port: raw.slice(end + 2) || '' };
+  }
+  const idx = raw.lastIndexOf(':');
+  if (idx === -1) return { host: raw, port: '' };
+  return { host: raw.slice(0, idx), port: raw.slice(idx + 1) };
+}
+
+function isLocalHostname(host) {
+  return LOCAL_HOSTNAMES.has(String(host || '').trim().toLowerCase());
+}
+
+// Anti-DNS-rebinding / anti-drive-by guard for the loopback API server.
+// - Host header must name localhost/127.0.0.1/[::1] (+ expected port if set).
+// - For state-mutating / resource-consuming requests (anything but GET/HEAD),
+//   any present Origin/Referer must also be local (blocks cross-site POSTs from
+//   a page in the user's browser).
+export function createHostGuard(expectedPort) {
+  const wantPort = expectedPort ? String(expectedPort) : '';
+  return function hostGuard(req, res, next) {
+    const { host, port } = hostnameFromHostHeader(req.headers.host);
+    if (!isLocalHostname(host) || (wantPort && port && port !== wantPort)) {
+      return sendJson(res, 403, { error: 'forbidden_host', message: 'Invalid Host header.' });
+    }
+
+    const method = String(req.method || 'GET').toUpperCase();
+    if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+      const origin = req.headers.origin || req.headers.referer;
+      if (origin) {
+        try {
+          const u = new URL(origin);
+          const originHost = u.hostname.toLowerCase();
+          const localOk = isLocalHostname(originHost) || isLocalHostname(`[${originHost}]`);
+          if (!localOk || (wantPort && u.port && u.port !== wantPort)) {
+            return sendJson(res, 403, { error: 'forbidden_origin', message: 'Cross-origin request rejected.' });
+          }
+        } catch {
+          return sendJson(res, 403, { error: 'forbidden_origin', message: 'Invalid Origin header.' });
+        }
+      }
+    }
+    next();
+  };
+}
+
 export function applySecurityHeaders(res) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');

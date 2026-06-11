@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import config from './config/manager.js';
 import { initCaches } from './search/engine.js';
 import { createRouter } from './api/routes.js';
-import { createRateLimiters, ipMiddleware, applySecurityHeaders } from './api/middleware.js';
+import { createRateLimiters, ipMiddleware, applySecurityHeaders, createHostGuard } from './api/middleware.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,12 +18,23 @@ const cfg = config.getConfig();
 const dataDir = config.getDataDir();
 initCaches(dataDir, cfg);
 
+const port = cfg.port || 3000;
+const host = cfg.host || '127.0.0.1';
+
 // Express app setup
 const app = express();
-app.set('trust proxy', 1);
+// trust proxy is OFF by default: the server binds to loopback only, so trusting
+// X-Forwarded-* would let any client spoof its IP and defeat the rate limiters.
+// Enable it ONLY when the operator explicitly declares a reverse-proxy deployment.
+if (cfg.trust_proxy) {
+  app.set('trust proxy', cfg.trust_proxy === true ? 1 : cfg.trust_proxy);
+}
 app.disable('x-powered-by');
 
 // Middleware
+// Reject requests whose Host header is not loopback (DNS-rebinding / drive-by
+// protection for the local API), then attach the client IP.
+app.use(createHostGuard(port));
 app.use(ipMiddleware);
 app.use(express.json({ limit: '256kb' }));
 
@@ -61,9 +72,6 @@ app.get('*', (req, res) => {
 });
 
 // Start server
-const port = cfg.port || 3000;
-const host = cfg.host || '127.0.0.1';
-
 const server = app.listen(port, host, () => {
   // Server ready — bin/termsearch.js prints the startup banner
 });
