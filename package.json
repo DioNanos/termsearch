@@ -1,6 +1,6 @@
 {
   "name": "termsearch",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "Personal search engine for Termux/Linux/macOS — zero-config, privacy-first, AI-optional",
   "type": "module",
   "bin": {
@@ -19,6 +19,7 @@
   "scripts": {
     "start": "node ./bin/termsearch.js",
     "dev": "node --watch ./src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
     "postinstall": "node scripts/postinstall.js"
   },
   "dependencies": {
